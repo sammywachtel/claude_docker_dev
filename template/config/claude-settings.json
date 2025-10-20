@@ -1,0 +1,4 @@
+{
+  "bypass_permissions": true,
+  "comment": "Claude Code runs with full bypass permissions in this container for safe experimentation"
+}

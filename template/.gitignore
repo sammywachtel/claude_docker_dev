@@ -1,0 +1,14 @@
+# Environment files (may contain secrets)
+.env
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
+
+# Docker build artifacts
+.docker-build-cache/

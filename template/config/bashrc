@@ -1,0 +1,39 @@
+# 🎯 Docker Dev Environment - Custom Bash Configuration
+
+# Enhanced prompt with visual indicator
+export PS1="\[\033[1;34m\][🐳 docker-dev]\[\033[0m\] \[\033[1;32m\]\w\[\033[0m\] \$ "
+
+# Helpful aliases
+alias ll='ls -lah'
+alias la='ls -A'
+alias l='ls -CF'
+alias ..='cd ..'
+alias ...='cd ../..'
+alias ....='cd ../../..'
+
+# Git shortcuts
+alias gs='git status'
+alias gd='git diff'
+alias gl='git log --oneline --graph --decorate'
+alias gco='git checkout'
+
+# Python shortcuts
+alias py='python'
+alias ipy='ipython'
+alias pip-dev='pip install -e .[dev]'
+
+# Node shortcuts
+alias nr='npm run'
+alias ni='npm install'
+alias nt='npm test'
+
+# Docker awareness
+echo "🐳 Docker Dev Environment - Claude Code Ready with Bypass Permissions ✓"
+echo "📂 Working directory: $(pwd)"
+echo "🐍 Python: $(python --version 2>&1)"
+echo "📦 Node: $(node --version 2>&1)"
+echo "🐙 GitHub CLI: $(gh --version 2>&1 | head -1)"
+echo ""
+echo "💡 Tip: Run '.docker-dev/scripts/install-*.sh' to install project dependencies"
+echo "💡 Git & SSH keys are mounted from host - git/gh commands work!"
+echo ""

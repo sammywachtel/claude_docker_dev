@@ -1,0 +1,110 @@
+# 🎬 Docker Dev Environment - Volume-mounted safe space for unrestricted Claude Code
+
+services:
+  devenv:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        USERNAME: ${HOST_USER:-devuser}
+        USER_UID: ${HOST_UID:-1000}
+        USER_GID: ${HOST_GID:-1000}
+
+    container_name: docker-dev-${PROJECT_NAME:-project}
+
+    # Match host user to prevent permission issues
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+
+    environment:
+      # User environment
+      - USER=${HOST_USER:-devuser}
+      - HOME=/home/${HOST_USER:-devuser}
+      # Development mode flags
+      - NODE_ENV=development
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      # Claude Code bypass enabled
+      - CLAUDE_BYPASS_PERMISSIONS=true
+      # SSH agent forwarding (for password-protected keys)
+      - SSH_AUTH_SOCK=${SSH_AUTH_SOCK:-/ssh-agent}
+      # GitHub CLI token (alternative to file-based auth)
+      - GH_TOKEN=${GH_TOKEN:-}
+
+    volumes:
+      # Main play: Mount project at the SAME path as on host
+      # This ensures Claude Code sees the same project path and shares history
+      - ${PROJECT_PATH:-..}:${PROJECT_PATH:-/workspace}
+
+      # Claude config from host (read-write, shared across all containers)
+      # All containers share the same .claude directory for unified project history
+      - ${HOME}/.claude:/home/${HOST_USER:-devuser}/.claude
+
+      # Docker-dev config overrides
+      - ./config:/home/${HOST_USER:-devuser}/.docker-dev:ro
+
+      # Persistent caches to speed up package installs
+      - pip-cache:/home/${HOST_USER:-devuser}/.cache/pip
+      - npm-cache:/home/${HOST_USER:-devuser}/.npm
+      - flutter-cache:/home/${HOST_USER:-devuser}/.pub-cache
+      - pre-commit-cache:/home/${HOST_USER:-devuser}/.cache/pre-commit
+
+      # Git and SSH config (read-only for security)
+      - ${HOME}/.gitconfig:/home/${HOST_USER:-devuser}/.gitconfig:ro
+      - ${HOME}/.ssh:/home/${HOST_USER:-devuser}/.ssh:ro
+
+      # GitHub CLI config (read-only)
+      # Run 'gh auth login' on host first, then config is shared with containers
+      - ${HOME}/.config/gh:/home/${HOST_USER:-devuser}/.config/gh:ro
+
+      # SSH agent forwarding (enables password-protected keys via macOS keychain)
+      # If SSH_AUTH_SOCK is not set, this creates an empty mount (SSH will still work without agent)
+      - ${SSH_AUTH_SOCK:-/dev/null}:/ssh-agent
+
+    working_dir: ${PROJECT_PATH:-/workspace}
+
+    # Keep container running in background
+    stdin_open: true
+    tty: true
+
+    # Networking - expose ports configured in .env
+    # Customize PORT_* variables in .env to avoid conflicts between projects
+    ports:
+      - "${PORT_BACKEND:-8000}:8000"      # Backend service
+      - "${PORT_FRONTEND:-3000}:3000"     # Frontend dev server
+      - "${PORT_VITE:-5173}:5173"         # Vite
+      - "${PORT_WEBSOCKET:-8080}:8080"    # WebSocket/Generic
+
+    networks:
+      - docker-dev-network
+
+    # Health check to ensure environment is ready
+    healthcheck:
+      test: ["CMD", "sh", "-c", "python --version && node --version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # Restart policy for long-running development
+    restart: unless-stopped
+
+# Persistent volumes for caches (project-specific)
+volumes:
+  pip-cache:
+    driver: local
+    name: ${PROJECT_NAME:-project}-pip-cache
+  npm-cache:
+    driver: local
+    name: ${PROJECT_NAME:-project}-npm-cache
+  flutter-cache:
+    driver: local
+    name: ${PROJECT_NAME:-project}-flutter-cache
+  pre-commit-cache:
+    driver: local
+    name: ${PROJECT_NAME:-project}-pre-commit-cache
+
+# Network for potential multi-container setups (project-specific)
+networks:
+  docker-dev-network:
+    driver: bridge
+    name: docker-dev-${PROJECT_NAME:-project}-network
