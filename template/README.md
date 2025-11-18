@@ -295,6 +295,35 @@ You must configure git and GitHub authentication **on your host machine first**:
    ssh -T git@github.com
    ```
 
+   **⚠️ IMPORTANT - macOS + Docker SSH Configuration:**
+
+   For GitHub to work in **both** macOS and Docker containers, configure `~/.ssh/config`:
+
+   ```
+   Host github.com
+     HostName github.com
+     AddKeysToAgent yes
+     IdentityFile ~/.ssh/id_ed25519
+     IgnoreUnknown UseKeychain
+
+   Match host github.com exec "uname -s | grep -q Darwin"
+     UseKeychain yes
+   ```
+
+   **Why this matters:**
+   - `UseKeychain yes` works on macOS but **breaks** in Linux containers
+   - The `Match` directive enables UseKeychain **only on macOS** (Darwin)
+   - `IgnoreUnknown UseKeychain` prevents errors in Linux/Docker
+   - This configuration works seamlessly in **both environments**
+
+   **Check your configuration:**
+   ```bash
+   # From your project directory after starting the container:
+   ./docker-dev/dev exec /workspace/.docker-dev/scripts/check-ssh-config.sh
+   ```
+
+   The checker script will validate your SSH config and provide guidance if needed.
+
    **SSH Agent Forwarding is Automatic!** Password-protected keys work seamlessly in containers.
 
 3. **Setup GitHub CLI** (separate from SSH - required for gh commands):

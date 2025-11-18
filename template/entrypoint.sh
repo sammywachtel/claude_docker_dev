@@ -62,6 +62,18 @@ if [ -f "/workspace/frontend/package.json" ]; then
     cd /workspace
 fi
 
+# Post-game analysis: Check SSH configuration for Docker/Mac compatibility
+if [ -f "/workspace/.docker-dev/scripts/check-ssh-config.sh" ]; then
+    echo "🔐 Checking SSH configuration..."
+    if /workspace/.docker-dev/scripts/check-ssh-config.sh; then
+        echo ""
+    else
+        echo -e "\n${YELLOW}⚠️  SSH config may need updates for optimal Docker/Mac compatibility${NC}"
+        echo "   See output above for recommendations"
+        echo ""
+    fi
+fi
+
 # Victory lap: Ready to code!
 echo "🎉 Development environment ready!"
 echo ""

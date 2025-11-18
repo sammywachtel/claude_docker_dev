@@ -73,12 +73,28 @@ The container mounts your `~/.gitconfig` and `~/.ssh` directories (read-only) so
    ssh-add --apple-use-keychain ~/.ssh/id_ed25519
    ```
 
-   **For macOS users**: Add this to `~/.ssh/config` for automatic loading:
+   **⚠️ IMPORTANT - macOS + Docker Users**: Use this configuration for `~/.ssh/config`:
    ```
-   Host *
+   Host github.com
+     HostName github.com
      AddKeysToAgent yes
-     UseKeychain yes
      IdentityFile ~/.ssh/id_ed25519
+     IgnoreUnknown UseKeychain
+
+   Match host github.com exec "uname -s | grep -q Darwin"
+     UseKeychain yes
+   ```
+
+   **Why this matters:**
+   - `UseKeychain yes` works on macOS but **breaks** in Docker containers
+   - The `Match` directive only enables UseKeychain when running on macOS (`Darwin`)
+   - `IgnoreUnknown UseKeychain` prevents errors in Linux environments
+   - This allows git/GitHub to work seamlessly in **both** your Mac and Docker containers
+
+   **Run the checker** to validate your setup:
+   ```bash
+   # After installation, from your project:
+   ./.docker-dev/dev exec /workspace/.docker-dev/scripts/check-ssh-config.sh
    ```
 
 3. **Add public key to GitHub**:
