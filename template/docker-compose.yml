@@ -35,6 +35,10 @@ services:
       # This ensures Claude Code sees the same project path and shares history
       - ${PROJECT_PATH:-..}:${PROJECT_PATH:-/workspace}
 
+      # AUTO_GENERATED_VOLUME_OVERRIDES_MARKER
+      # The install script will inject platform-specific binary isolation here
+      # This prevents Mac/Linux binary conflicts for node_modules and .venv
+
       # Claude config from host (read-write, shared across all containers)
       # All containers share the same .claude directory for unified project history
       - ${HOME}/.claude:/home/${HOST_USER:-devuser}/.claude

@@ -18,6 +18,97 @@ success() { echo -e "${GREEN}✓${NC} $1"; }
 warning() { echo -e "${YELLOW}⚠${NC} $1"; }
 error() { echo -e "${RED}✗${NC} $1"; }
 
+# 🔍 Project detection: Find locations that need platform-specific binary isolation
+# Scans for Node.js projects (package.json) and Python projects (requirements.txt, pyproject.toml, etc.)
+# Returns paths relative to project root where node_modules and .venv directories should be isolated
+
+detect_node_modules_locations() {
+    local target_dir="$1"
+
+    # Find all package.json files, excluding already-installed dependencies and git
+    find "$target_dir" -name "package.json" \
+        -not -path "*/node_modules/*" \
+        -not -path "*/.docker-dev/*" \
+        -not -path "*/.git/*" \
+        2>/dev/null | while read -r pkg; do
+        # Get directory containing package.json, relative to target
+        local pkg_dir=$(dirname "$pkg")
+        local rel_dir="${pkg_dir#$target_dir/}"
+
+        # If package.json is at project root, just output "node_modules"
+        if [ "$rel_dir" = "$pkg_dir" ]; then
+            echo "node_modules"
+        else
+            echo "$rel_dir/node_modules"
+        fi
+    done
+}
+
+detect_venv_locations() {
+    local target_dir="$1"
+
+    # Look for Python project markers (various formats)
+    find "$target_dir" \( \
+        -name "requirements.txt" -o \
+        -name "requirements-*.txt" -o \
+        -name "pyproject.toml" -o \
+        -name "setup.py" -o \
+        -name "Pipfile" -o \
+        -name "poetry.lock" \
+    \) \
+        -not -path "*/.venv/*" \
+        -not -path "*/venv/*" \
+        -not -path "*/node_modules/*" \
+        -not -path "*/.docker-dev/*" \
+        -not -path "*/.git/*" \
+        2>/dev/null | while read -r pyfile; do
+        # Get directory containing Python project file, relative to target
+        local py_dir=$(dirname "$pyfile")
+        local rel_dir="${py_dir#$target_dir/}"
+
+        # If Python file is at project root, just output ".venv"
+        if [ "$rel_dir" = "$py_dir" ]; then
+            echo ".venv"
+        else
+            echo "$rel_dir/.venv"
+        fi
+    done | sort -u  # Remove duplicates if multiple Python files in same dir
+}
+
+generate_volume_overrides() {
+    local target_dir="$1"
+    local overrides=""
+    local count=0
+
+    # Start with header comment
+    overrides+="      # Auto-generated volume overrides to isolate platform-specific binaries\n"
+    overrides+="      # Prevents Mac/Linux binary conflicts for node_modules and Python .venv\n"
+    overrides+="      # Detected during installation - rerun installer to update\n"
+
+    # Collect Node.js locations
+    while IFS= read -r path; do
+        if [ -n "$path" ]; then
+            overrides+="      - \${PROJECT_PATH}/$path\n"
+            count=$((count + 1))
+        fi
+    done < <(detect_node_modules_locations "$target_dir")
+
+    # Collect Python locations
+    while IFS= read -r path; do
+        if [ -n "$path" ]; then
+            overrides+="      - \${PROJECT_PATH}/$path\n"
+            count=$((count + 1))
+        fi
+    done < <(detect_venv_locations "$target_dir")
+
+    if [ $count -eq 0 ]; then
+        overrides+="      # No Node.js or Python projects detected\n"
+    fi
+
+    echo -e "$overrides"
+    echo "$count"  # Return count on last line for caller to capture
+}
+
 # 🎯 Main play: Determine installation target
 TARGET_DIR="${1:-.}"
 
@@ -56,6 +147,48 @@ fi
 info "Copying .docker-dev/ template..."
 cp -r "$TEMPLATE_DIR" "$TARGET_DIR/.docker-dev"
 success "Template copied"
+
+# 🔍 Smart detection: Auto-configure volume overrides for platform-specific binaries
+info "Detecting Node.js and Python projects for binary isolation..."
+VOLUME_OVERRIDES_OUTPUT=$(generate_volume_overrides "$TARGET_DIR")
+# Last line is the count, everything else is the overrides
+OVERRIDE_COUNT=$(echo "$VOLUME_OVERRIDES_OUTPUT" | tail -n 1)
+# Cross-platform way to get all but last line (head -n -1 doesn't work on macOS)
+VOLUME_OVERRIDES=$(echo "$VOLUME_OVERRIDES_OUTPUT" | sed '$d')
+
+# Inject into docker-compose.yml
+COMPOSE_FILE="$TARGET_DIR/.docker-dev/docker-compose.yml"
+if [[ -f "$COMPOSE_FILE" ]]; then
+    # Write overrides to temporary file for awk to read (handles newlines properly)
+    TEMP_OVERRIDES=$(mktemp)
+    echo -e "$VOLUME_OVERRIDES" > "$TEMP_OVERRIDES"
+
+    # Replace marker with generated overrides using awk
+    awk -v overrides_file="$TEMP_OVERRIDES" '
+        /AUTO_GENERATED_VOLUME_OVERRIDES_MARKER/ {
+            # Read and print overrides from file
+            while ((getline line < overrides_file) > 0) {
+                print line
+            }
+            close(overrides_file)
+            # Skip the next two lines (the comments after the marker)
+            getline; getline
+            next
+        }
+        { print }
+    ' "$COMPOSE_FILE" > "$COMPOSE_FILE.tmp" && mv "$COMPOSE_FILE.tmp" "$COMPOSE_FILE"
+
+    # Clean up temp file
+    rm -f "$TEMP_OVERRIDES"
+
+    if [[ "$OVERRIDE_COUNT" -gt 0 ]]; then
+        success "Auto-configured $OVERRIDE_COUNT binary isolation volume(s)"
+    else
+        info "No Node.js or Python projects detected (volumes can be added manually later)"
+    fi
+else
+    warning "docker-compose.yml not found, skipping volume override injection"
+fi
 
 # 🔧 Configuration moves: Make scripts executable
 info "Making scripts executable..."
