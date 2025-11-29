@@ -3,6 +3,10 @@
 
 set -e
 
+# Source nvm to make node/npm available
+export NVM_DIR="/home/$(whoami)/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
 echo "🎯 Docker Dev Environment Starting..."
 
 # Opening move: Check and install Python dependencies
