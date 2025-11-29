@@ -9,6 +9,16 @@ export NVM_DIR="/home/$(whoami)/.nvm"
 
 echo "🎯 Docker Dev Environment Starting..."
 
+# Fix permissions on shadowed volumes (anonymous volumes are created as root)
+# Recursively find and fix node_modules and .venv directories that aren't writable
+echo "🔧 Checking permissions on shadowed volumes..."
+find /workspace -maxdepth 3 -type d \( -name "node_modules" -o -name ".venv" \) 2>/dev/null | while read dir; do
+    if [ ! -w "$dir" ]; then
+        echo "   Fixing: $dir"
+        sudo chown -R $(id -u):$(id -g) "$dir"
+    fi
+done
+
 # Opening move: Check and install Python dependencies
 if [ -f "/workspace/requirements.txt" ]; then
     echo "📦 Found requirements.txt - installing Python dependencies..."
