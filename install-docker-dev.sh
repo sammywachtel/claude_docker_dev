@@ -88,7 +88,7 @@ generate_volume_overrides() {
     # Collect Node.js locations
     while IFS= read -r path; do
         if [ -n "$path" ]; then
-            overrides+="      - /workspace/$path\n"
+            overrides+="      - \${PROJECT_PATH}/$path\n"
             count=$((count + 1))
         fi
     done < <(detect_node_modules_locations "$target_dir")
@@ -96,7 +96,7 @@ generate_volume_overrides() {
     # Collect Python locations
     while IFS= read -r path; do
         if [ -n "$path" ]; then
-            overrides+="      - /workspace/$path\n"
+            overrides+="      - \${PROJECT_PATH}/$path\n"
             count=$((count + 1))
         fi
     done < <(detect_venv_locations "$target_dir")

@@ -9,10 +9,13 @@ export NVM_DIR="/home/$(whoami)/.nvm"
 
 echo "🎯 Docker Dev Environment Starting..."
 
+# Get the project directory (working directory set by docker-compose)
+PROJECT_DIR=$(pwd)
+
 # Fix permissions on shadowed volumes (anonymous volumes are created as root)
 # Recursively find and fix node_modules and .venv directories that aren't writable
 echo "🔧 Checking permissions on shadowed volumes..."
-find /workspace -maxdepth 3 -type d \( -name "node_modules" -o -name ".venv" \) 2>/dev/null | while read dir; do
+find "$PROJECT_DIR" -maxdepth 3 -type d \( -name "node_modules" -o -name ".venv" \) 2>/dev/null | while read dir; do
     if [ ! -w "$dir" ]; then
         echo "   Fixing: $dir"
         sudo chown -R $(id -u):$(id -g) "$dir"
@@ -23,23 +26,23 @@ done
 # Set AUTO_INSTALL_DEPS=false in .env to disable automatic dependency installation
 if [ "${AUTO_INSTALL_DEPS:-true}" = "true" ]; then
     # Opening move: Check and install Python dependencies
-    if [ -f "/workspace/requirements.txt" ]; then
+    if [ -f "$PROJECT_DIR/requirements.txt" ]; then
         echo "📦 Found requirements.txt - installing Python dependencies..."
-        pip install -r /workspace/requirements.txt || echo "⚠️  Python dependency installation failed"
+        pip install -r "$PROJECT_DIR/requirements.txt" || echo "⚠️  Python dependency installation failed"
         echo "✅ Python dependencies installed"
     fi
 
     # Check for additional Python requirement files
-    if [ -f "/workspace/requirements-dev.txt" ]; then
+    if [ -f "$PROJECT_DIR/requirements-dev.txt" ]; then
         echo "📦 Found requirements-dev.txt - installing dev dependencies..."
-        pip install -r /workspace/requirements-dev.txt || echo "⚠️  Dev dependency installation failed"
+        pip install -r "$PROJECT_DIR/requirements-dev.txt" || echo "⚠️  Dev dependency installation failed"
         echo "✅ Dev dependencies installed"
     fi
 
     # Main play: Check and install Node.js dependencies
-    if [ -f "/workspace/package.json" ]; then
+    if [ -f "$PROJECT_DIR/package.json" ]; then
         echo "📦 Found package.json - installing Node dependencies..."
-        cd /workspace
+        cd "$PROJECT_DIR"
         npm install || echo "⚠️  Node dependency installation failed"
         echo "✅ Node dependencies installed"
 
@@ -62,9 +65,9 @@ if [ "${AUTO_INSTALL_DEPS:-true}" = "true" ]; then
     fi
 
     # Check for frontend subdirectory with its own package.json
-    if [ -f "/workspace/frontend/package.json" ]; then
+    if [ -f "$PROJECT_DIR/frontend/package.json" ]; then
         echo "📦 Found frontend/package.json - installing frontend dependencies..."
-        cd /workspace/frontend
+        cd "$PROJECT_DIR/frontend"
         npm install || echo "⚠️  Frontend dependency installation failed"
         echo "✅ Frontend dependencies installed"
 
@@ -76,7 +79,7 @@ if [ "${AUTO_INSTALL_DEPS:-true}" = "true" ]; then
             echo "✅ Playwright browsers installed"
         fi
 
-        cd /workspace
+        cd "$PROJECT_DIR"
     fi
 else
     echo "ℹ️  Auto-install disabled. To install dependencies manually:"
@@ -85,9 +88,9 @@ else
 fi
 
 # Post-game analysis: Check SSH configuration for Docker/Mac compatibility
-if [ -f "/workspace/.docker-dev/scripts/check-ssh-config.sh" ]; then
+if [ -f "$PROJECT_DIR/.docker-dev/scripts/check-ssh-config.sh" ]; then
     echo "🔐 Checking SSH configuration..."
-    if /workspace/.docker-dev/scripts/check-ssh-config.sh; then
+    if "$PROJECT_DIR/.docker-dev/scripts/check-ssh-config.sh"; then
         echo ""
     else
         echo -e "\n${YELLOW}⚠️  SSH config may need updates for optimal Docker/Mac compatibility${NC}"
