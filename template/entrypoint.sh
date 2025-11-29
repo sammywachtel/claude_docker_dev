@@ -19,61 +19,70 @@ find /workspace -maxdepth 3 -type d \( -name "node_modules" -o -name ".venv" \) 
     fi
 done
 
-# Opening move: Check and install Python dependencies
-if [ -f "/workspace/requirements.txt" ]; then
-    echo "📦 Found requirements.txt - installing Python dependencies..."
-    pip install -r /workspace/requirements.txt
-    echo "✅ Python dependencies installed"
-fi
-
-# Check for additional Python requirement files
-if [ -f "/workspace/requirements-dev.txt" ]; then
-    echo "📦 Found requirements-dev.txt - installing dev dependencies..."
-    pip install -r /workspace/requirements-dev.txt
-    echo "✅ Dev dependencies installed"
-fi
-
-# Main play: Check and install Node.js dependencies
-if [ -f "/workspace/package.json" ]; then
-    echo "📦 Found package.json - installing Node dependencies..."
-    cd /workspace
-    npm install
-    echo "✅ Node dependencies installed"
-
-    # Tricky bit: Handle special post-install requirements for certain packages
-    # Check if playwright is in dependencies and install browsers
-    if grep -q '"playwright"' package.json 2>/dev/null; then
-        echo "🎭 Detected Playwright - installing browsers and system dependencies..."
-        npx playwright install-deps
-        npx playwright install
-        echo "✅ Playwright browsers installed"
+# Auto-install dependencies (disabled by default to prevent startup failures)
+# Set AUTO_INSTALL_DEPS=true in .env to enable automatic dependency installation
+if [ "${AUTO_INSTALL_DEPS:-false}" = "true" ]; then
+    # Opening move: Check and install Python dependencies
+    if [ -f "/workspace/requirements.txt" ]; then
+        echo "📦 Found requirements.txt - installing Python dependencies..."
+        pip install -r /workspace/requirements.txt || echo "⚠️  Python dependency installation failed"
+        echo "✅ Python dependencies installed"
     fi
 
-    # Check if puppeteer is in dependencies
-    if grep -q '"puppeteer"' package.json 2>/dev/null; then
-        echo "🤖 Detected Puppeteer - installing Chromium..."
-        # Puppeteer usually auto-installs, but we can force it
-        node -e "const puppeteer = require('puppeteer');" 2>/dev/null || echo "⚠️  Puppeteer install may need attention"
-        echo "✅ Puppeteer setup complete"
-    fi
-fi
-
-# Check for frontend subdirectory with its own package.json
-if [ -f "/workspace/frontend/package.json" ]; then
-    echo "📦 Found frontend/package.json - installing frontend dependencies..."
-    cd /workspace/frontend
-    npm install
-    echo "✅ Frontend dependencies installed"
-
-    # Handle special packages in frontend too
-    if grep -q '"playwright"' package.json 2>/dev/null; then
-        echo "🎭 Detected Playwright in frontend - installing browsers..."
-        npx playwright install-deps
-        npx playwright install
-        echo "✅ Playwright browsers installed"
+    # Check for additional Python requirement files
+    if [ -f "/workspace/requirements-dev.txt" ]; then
+        echo "📦 Found requirements-dev.txt - installing dev dependencies..."
+        pip install -r /workspace/requirements-dev.txt || echo "⚠️  Dev dependency installation failed"
+        echo "✅ Dev dependencies installed"
     fi
 
-    cd /workspace
+    # Main play: Check and install Node.js dependencies
+    if [ -f "/workspace/package.json" ]; then
+        echo "📦 Found package.json - installing Node dependencies..."
+        cd /workspace
+        npm install || echo "⚠️  Node dependency installation failed"
+        echo "✅ Node dependencies installed"
+
+        # Tricky bit: Handle special post-install requirements for certain packages
+        # Check if playwright is in dependencies and install browsers
+        if grep -q '"playwright"' package.json 2>/dev/null; then
+            echo "🎭 Detected Playwright - installing browsers and system dependencies..."
+            npx playwright install-deps
+            npx playwright install
+            echo "✅ Playwright browsers installed"
+        fi
+
+        # Check if puppeteer is in dependencies
+        if grep -q '"puppeteer"' package.json 2>/dev/null; then
+            echo "🤖 Detected Puppeteer - installing Chromium..."
+            # Puppeteer usually auto-installs, but we can force it
+            node -e "const puppeteer = require('puppeteer');" 2>/dev/null || echo "⚠️  Puppeteer install may need attention"
+            echo "✅ Puppeteer setup complete"
+        fi
+    fi
+
+    # Check for frontend subdirectory with its own package.json
+    if [ -f "/workspace/frontend/package.json" ]; then
+        echo "📦 Found frontend/package.json - installing frontend dependencies..."
+        cd /workspace/frontend
+        npm install || echo "⚠️  Frontend dependency installation failed"
+        echo "✅ Frontend dependencies installed"
+
+        # Handle special packages in frontend too
+        if grep -q '"playwright"' package.json 2>/dev/null; then
+            echo "🎭 Detected Playwright in frontend - installing browsers..."
+            npx playwright install-deps
+            npx playwright install
+            echo "✅ Playwright browsers installed"
+        fi
+
+        cd /workspace
+    fi
+else
+    echo "ℹ️  Auto-install disabled. To install dependencies manually:"
+    echo "   - Python: pip install -r requirements.txt"
+    echo "   - Node.js: npm install"
+    echo "   - Or enable auto-install: set AUTO_INSTALL_DEPS=true in .env"
 fi
 
 # Post-game analysis: Check SSH configuration for Docker/Mac compatibility
