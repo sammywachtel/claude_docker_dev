@@ -88,7 +88,7 @@ generate_volume_overrides() {
     # Collect Node.js locations
     while IFS= read -r path; do
         if [ -n "$path" ]; then
-            overrides+="      - \${PROJECT_PATH}/$path\n"
+            overrides+="      - /workspace/$path\n"
             count=$((count + 1))
         fi
     done < <(detect_node_modules_locations "$target_dir")
@@ -96,7 +96,7 @@ generate_volume_overrides() {
     # Collect Python locations
     while IFS= read -r path; do
         if [ -n "$path" ]; then
-            overrides+="      - \${PROJECT_PATH}/$path\n"
+            overrides+="      - /workspace/$path\n"
             count=$((count + 1))
         fi
     done < <(detect_venv_locations "$target_dir")
@@ -215,6 +215,37 @@ else
 .docker-dev/
 EOF
     success "Created .gitignore"
+fi
+
+# 🔧 Dockerignore update: Ensure .venv is excluded from Docker build context
+DOCKERIGNORE="$TARGET_DIR/.dockerignore"
+if [[ -f "$DOCKERIGNORE" ]]; then
+    if ! grep -q "^\.venv/" "$DOCKERIGNORE" 2>/dev/null; then
+        info "Adding .venv/ to .dockerignore..."
+        # Find the Python section or add it after venv/
+        if grep -q "^venv/" "$DOCKERIGNORE"; then
+            # Add .venv/ right after venv/
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                sed -i '' '/^venv\//a\
+.venv/
+' "$DOCKERIGNORE"
+            else
+                sed -i '/^venv\//a .venv/' "$DOCKERIGNORE"
+            fi
+            success "Added .venv/ to .dockerignore"
+        else
+            # No venv/ found, add Python section at end
+            echo "" >> "$DOCKERIGNORE"
+            echo "# Python virtual environments" >> "$DOCKERIGNORE"
+            echo "venv/" >> "$DOCKERIGNORE"
+            echo ".venv/" >> "$DOCKERIGNORE"
+            success "Added Python exclusions to .dockerignore"
+        fi
+    else
+        info ".venv/ already in .dockerignore"
+    fi
+else
+    info "No .dockerignore found in project (only needed if project has Dockerfiles)"
 fi
 
 # 🎨 Environment setup: Create .env from example

@@ -31,9 +31,9 @@ services:
       - GH_TOKEN=${GH_TOKEN:-}
 
     volumes:
-      # Main play: Mount project at the SAME path as on host
-      # This ensures Claude Code sees the same project path and shares history
-      - ${PROJECT_PATH:-..}:${PROJECT_PATH:-/workspace}
+      # Main play: Mount project to /workspace in container
+      # Host path varies (PROJECT_PATH), but container path is always /workspace
+      - ${PROJECT_PATH:-..}:/workspace
 
       # AUTO_GENERATED_VOLUME_OVERRIDES_MARKER
       # The install script will inject platform-specific binary isolation here
@@ -64,7 +64,7 @@ services:
       # If SSH_AUTH_SOCK is not set, this creates an empty mount (SSH will still work without agent)
       - ${SSH_AUTH_SOCK:-/dev/null}:/ssh-agent
 
-    working_dir: ${PROJECT_PATH:-/workspace}
+    working_dir: /workspace
 
     # Keep container running in background
     stdin_open: true
