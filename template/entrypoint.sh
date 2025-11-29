@@ -19,9 +19,9 @@ find /workspace -maxdepth 3 -type d \( -name "node_modules" -o -name ".venv" \) 
     fi
 done
 
-# Auto-install dependencies (disabled by default to prevent startup failures)
-# Set AUTO_INSTALL_DEPS=true in .env to enable automatic dependency installation
-if [ "${AUTO_INSTALL_DEPS:-false}" = "true" ]; then
+# Auto-install dependencies (enabled by default)
+# Set AUTO_INSTALL_DEPS=false in .env to disable automatic dependency installation
+if [ "${AUTO_INSTALL_DEPS:-true}" = "true" ]; then
     # Opening move: Check and install Python dependencies
     if [ -f "/workspace/requirements.txt" ]; then
         echo "📦 Found requirements.txt - installing Python dependencies..."
@@ -82,7 +82,6 @@ else
     echo "ℹ️  Auto-install disabled. To install dependencies manually:"
     echo "   - Python: pip install -r requirements.txt"
     echo "   - Node.js: npm install"
-    echo "   - Or enable auto-install: set AUTO_INSTALL_DEPS=true in .env"
 fi
 
 # Post-game analysis: Check SSH configuration for Docker/Mac compatibility

@@ -20,6 +20,8 @@ RUN apt-get update && apt-get install -y \
     # Python build dependencies
     libssl-dev zlib1g-dev libbz2-dev libreadline-dev \
     libsqlite3-dev libffi-dev liblzma-dev \
+    # Java (required by some Node.js packages like node-plantuml)
+    default-jre-headless \
     # Additional useful tools
     vim nano less tree \
     && rm -rf /var/lib/apt/lists/*
