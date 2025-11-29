@@ -113,19 +113,13 @@ RUN . "$NVM_DIR/nvm.sh" \
 #     && flutter precache \
 #     && flutter doctor
 
-# 🤖 Claude Code CLI: Try to install, but don't fail if unavailable
-# Note: If installation fails, you can install manually from host:
-#   docker cp $(which claude) <container>:/usr/local/bin/claude
-USER root
-
-# Try installing via various methods (won't fail build if unavailable)
-RUN (curl -fsSL https://deb.anthropic.com/setup.sh | bash \
-    && apt-get update \
-    && apt-get install -y claude-code 2>/dev/null) || \
-    echo "Claude Code not available via package manager - install manually if needed" \
-    && rm -rf /var/lib/apt/lists/*
-
+# 🤖 Claude Code CLI: Install via npm
 USER $USERNAME
+
+# Install Claude Code globally via npm (requires Node.js which we installed earlier)
+RUN . "$NVM_DIR/nvm.sh" \
+    && npm install -g @anthropic-ai/claude-code \
+    && echo "Claude Code installed successfully"
 
 # Time to tackle the tricky bit: Configure Claude Code with bypass permissions
 RUN mkdir -p /home/$USERNAME/.claude \
