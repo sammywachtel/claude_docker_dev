@@ -118,14 +118,24 @@ RUN . "$NVM_DIR/nvm.sh" \
 # 🤖 Claude Code CLI: Install via npm
 USER $USERNAME
 
-# Install Claude Code globally via npm (requires Node.js which we installed earlier)
+# Install Claude Code and Playwright globally via npm
 RUN . "$NVM_DIR/nvm.sh" \
-    && npm install -g @anthropic-ai/claude-code \
-    && echo "Claude Code installed successfully"
+    && npm install -g @anthropic-ai/claude-code playwright \
+    && echo "Claude Code and Playwright installed successfully"
+
+# Install Playwright browsers (Chromium and Firefox)
+RUN . "$NVM_DIR/nvm.sh" \
+    && npx playwright install --with-deps chromium firefox \
+    && echo "Playwright browsers installed"
 
 # Time to tackle the tricky bit: Configure Claude Code with bypass permissions
 RUN mkdir -p /home/$USERNAME/.claude \
     && echo '{"bypass_permissions": true}' > /home/$USERNAME/.claude/settings.json
+
+# Make sure claude-code is accessible via simple 'claude' command
+RUN . "$NVM_DIR/nvm.sh" \
+    && CLAUDE_PATH=$(which claude-code) \
+    && ln -sf "$CLAUDE_PATH" "$(dirname $CLAUDE_PATH)/claude" || true
 
 # 🎨 Shell customization: Add helpful aliases and prompt
 RUN echo 'alias ll="ls -lah"' >> ~/.bashrc \

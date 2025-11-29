@@ -186,9 +186,8 @@ case "${1:-help}" in
         fi
 
         # Run claude with bypass permissions
-        # Use PROJECT_PATH from .env to ensure same path as host
-        source .env 2>/dev/null || true
-        WORK_DIR="${PROJECT_PATH:-/workspace}"
+        # Container always uses /workspace regardless of host path
+        WORK_DIR="/workspace"
 
         if docker compose exec -T devenv which claude-code &>/dev/null; then
             docker compose exec devenv /bin/bash -l -c "cd '$WORK_DIR' && claude-code --dangerously-skip-permissions"
@@ -203,9 +202,8 @@ case "${1:-help}" in
             exit 1
         fi
         shift
-        # Use PROJECT_PATH from .env to ensure same path as host
-        source .env 2>/dev/null || true
-        WORK_DIR="${PROJECT_PATH:-/workspace}"
+        # Container always uses /workspace regardless of host path
+        WORK_DIR="/workspace"
         docker compose exec devenv /bin/bash -l -c "cd '$WORK_DIR' && $*"
         ;;
 
