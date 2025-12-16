@@ -127,74 +127,15 @@ case "${1:-help}" in
     claude)
         info "Starting Claude Code with bypass permissions..."
 
-        # Check if claude exists in container
-        if ! docker compose exec -T devenv which claude-code &>/dev/null && \
-           ! docker compose exec -T devenv which claude &>/dev/null; then
-            warning "Claude Code not found in container"
-
-            # Try to find it on host
-            CLAUDE_BIN=""
-            if command -v claude-code &>/dev/null; then
-                CLAUDE_BIN="$(which claude-code)"
-            elif command -v claude &>/dev/null; then
-                CLAUDE_BIN="$(which claude)"
-            else
-                error "Claude Code not found on host or in container"
-                echo ""
-                info "Install Claude Code on your host, then run this command again"
-                exit 1
-            fi
-
-            # Find the npm global directory with Claude installation
-            info "Looking for Claude installation directory..."
-
-            # Try to find node_modules directory
-            CLAUDE_MODULE_DIR=""
-            if [[ -L "$CLAUDE_BIN" ]]; then
-                # Get the directory where the symlink is
-                BIN_DIR="$(dirname "$CLAUDE_BIN")"
-                # Get the relative target
-                CLAUDE_REL="$(readlink "$CLAUDE_BIN" 2>/dev/null)"
-                if [[ -n "$CLAUDE_REL" ]]; then
-                    # Resolve to absolute path
-                    CLAUDE_REAL="$(cd "$BIN_DIR" && cd "$(dirname "$CLAUDE_REL")" && pwd)"
-                    if [[ -n "$CLAUDE_REAL" ]] && [[ -d "$CLAUDE_REAL" ]]; then
-                        CLAUDE_MODULE_DIR="$CLAUDE_REAL"
-                    fi
-                fi
-            fi
-
-            if [[ -z "$CLAUDE_MODULE_DIR" ]] || [[ ! -d "$CLAUDE_MODULE_DIR" ]]; then
-                error "Could not locate Claude Code installation directory"
-                echo ""
-                warning "Alternative: Run Claude Code from host instead of copying to container"
-                info "The container files are accessible from host at: $(pwd)"
-                exit 1
-            fi
-
-            info "Found Claude module at: $CLAUDE_MODULE_DIR"
-            info "Copying Claude Code installation to container..."
-            CONTAINER_ID=$(docker compose ps -q devenv)
-
-            # Copy the entire module directory
-            docker cp "$CLAUDE_MODULE_DIR" "$CONTAINER_ID:/usr/local/lib/claude-code"
-
-            # Create symlink in container (need sudo for /usr/local/bin)
-            docker compose exec -T devenv sudo /bin/bash -c "ln -sf /usr/local/lib/claude-code/cli.js /usr/local/bin/claude && chmod +x /usr/local/bin/claude && chmod +x /usr/local/lib/claude-code/cli.js"
-
-            success "Claude Code installed in container"
-        fi
-
         # Run claude with bypass permissions
         # Use PROJECT_PATH from .env to ensure same path as host (for shared history)
         source .env 2>/dev/null || true
         WORK_DIR="${PROJECT_PATH:-/workspace}"
 
-        if docker compose exec -T devenv which claude-code &>/dev/null; then
-            docker compose exec devenv /bin/bash -l -c "cd '$WORK_DIR' && claude-code --dangerously-skip-permissions"
-        else
-            docker compose exec devenv /bin/bash -l -c "cd '$WORK_DIR' && claude --dangerously-skip-permissions"
-        fi
+        # Source nvm from build location (not $HOME which may differ at runtime)
+        # Claude Code is installed in the container via npm during docker build
+        # npm creates the binary as 'claude' not 'claude-code'
+        docker compose exec devenv /bin/bash -c "source /home/\$(whoami)/.nvm/nvm.sh && cd '$WORK_DIR' && claude --dangerously-skip-permissions"
         ;;
 
     exec|run)
@@ -245,19 +186,19 @@ case "${1:-help}" in
         echo "Usage: $0 <command>"
         echo ""
         echo "Container Management:"
-        echo "  ${GREEN}start${NC}       Start the development environment"
-        echo "  ${GREEN}stop${NC}        Stop the development environment"
-        echo "  ${GREEN}restart${NC}     Restart the development environment"
-        echo "  ${GREEN}rebuild${NC}     Rebuild the container from scratch"
-        echo "  ${GREEN}clean${NC}       Remove container and cached volumes"
-        echo "  ${GREEN}status${NC}      Show container status"
+        echo -e "  ${GREEN}start${NC}       Start the development environment"
+        echo -e "  ${GREEN}stop${NC}        Stop the development environment"
+        echo -e "  ${GREEN}restart${NC}     Restart the development environment"
+        echo -e "  ${GREEN}rebuild${NC}     Rebuild the container from scratch"
+        echo -e "  ${GREEN}clean${NC}       Remove container and cached volumes"
+        echo -e "  ${GREEN}status${NC}      Show container status"
         echo ""
         echo "Development:"
-        echo "  ${GREEN}shell${NC}       Get an interactive shell in the container"
-        echo "  ${GREEN}claude${NC}      Run Claude Code with bypass permissions"
-        echo "  ${GREEN}exec${NC}        Execute a command in the container"
-        echo "                ${BLUE}Example: $0 exec python test.py${NC}"
-        echo "  ${GREEN}logs${NC}        View container logs"
+        echo -e "  ${GREEN}shell${NC}       Get an interactive shell in the container"
+        echo -e "  ${GREEN}claude${NC}      Run Claude Code with bypass permissions"
+        echo -e "  ${GREEN}exec${NC}        Execute a command in the container"
+        echo -e "                ${BLUE}Example: $0 exec python test.py${NC}"
+        echo -e "  ${GREEN}logs${NC}        View container logs"
         echo ""
         echo "Examples:"
         echo "  $0 start"

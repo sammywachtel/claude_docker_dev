@@ -3,9 +3,26 @@
 
 set -e
 
+# Ensure HOME directory structure exists (for macOS paths like /Users/username)
+# Docker will mount volumes, but parent directories must exist first
+if [ -n "$HOME" ] && [ "$HOME" != "/home/$(whoami)" ]; then
+    if [ ! -d "$HOME" ]; then
+        echo "🏗️  Creating HOME directory structure at $HOME..."
+        sudo mkdir -p "$HOME"
+    fi
+    # Fix ownership of parent directory only (not recursive to avoid touching read-only mounts)
+    echo "🔧 Fixing ownership of $HOME..."
+    sudo chown $(id -u):$(id -g) "$HOME"
+fi
+
 # Source nvm to make node/npm available
-export NVM_DIR="/home/$(whoami)/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+# Check both the container's default location and the host's HOME
+if [ -s "/home/$(whoami)/.nvm/nvm.sh" ]; then
+    export NVM_DIR="/home/$(whoami)/.nvm"
+elif [ -s "$HOME/.nvm/nvm.sh" ]; then
+    export NVM_DIR="$HOME/.nvm"
+fi
+[ -n "$NVM_DIR" ] && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
 echo "🎯 Docker Dev Environment Starting..."
 
