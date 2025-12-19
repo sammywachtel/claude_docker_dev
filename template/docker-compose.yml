@@ -53,6 +53,9 @@ services:
       - flutter-cache:${HOME}/.pub-cache
       - pre-commit-cache:${HOME}/.cache/pre-commit
 
+      # Claude Code cache (for MCP logs and other Claude CLI data)
+      - ${HOME}/.cache/claude-cli-nodejs:${HOME}/.cache/claude-cli-nodejs
+
       # Git and SSH config (read-only for security)
       - ${HOME}/.gitconfig:${HOME}/.gitconfig:ro
       - ${HOME}/.ssh:${HOME}/.ssh:ro
