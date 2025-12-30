@@ -13,6 +13,15 @@ if [ -n "$HOME" ] && [ "$HOME" != "/home/$(whoami)" ]; then
     # Fix ownership of parent directory only (not recursive to avoid touching read-only mounts)
     echo "🔧 Fixing ownership of $HOME..."
     sudo chown $(id -u):$(id -g) "$HOME"
+
+    # Create symlink from Linux-style home to macOS-style home for SSH/Git compatibility
+    # SSH uses passwd database for ~ expansion, which points to /home/username
+    # But our .ssh directory is mounted at the macOS path /Users/username/.ssh
+    LINUX_HOME="/home/$(whoami)"
+    if [ -d "$HOME/.ssh" ] && [ ! -e "$LINUX_HOME/.ssh" ]; then
+        echo "🔗 Creating .ssh symlink for SSH/Git compatibility..."
+        ln -s "$HOME/.ssh" "$LINUX_HOME/.ssh"
+    fi
 fi
 
 # Source nvm to make node/npm available
