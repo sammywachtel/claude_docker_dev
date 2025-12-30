@@ -56,6 +56,9 @@ services:
       # Claude Code cache (for MCP logs and other Claude CLI data)
       - ${HOME}/.cache/claude-cli-nodejs:${HOME}/.cache/claude-cli-nodejs
 
+      # Playwright cache (for browser binaries)
+      - playwright-cache:${HOME}/.cache/ms-playwright
+
       # GitHub CLI cache (for run logs and API responses)
       - ${HOME}/.cache/gh:${HOME}/.cache/gh
 
@@ -113,6 +116,9 @@ volumes:
   pre-commit-cache:
     driver: local
     name: ${PROJECT_NAME:-project}-pre-commit-cache
+  playwright-cache:
+    driver: local
+    name: ${PROJECT_NAME:-project}-playwright-cache
 
 # Network for potential multi-container setups (project-specific)
 networks:
