@@ -93,7 +93,7 @@ services:
 
     # Health check to ensure environment is ready
     healthcheck:
-      test: ["CMD", "sh", "-c", "python --version && node --version"]
+      test: ["CMD", "bash", "-c", "python --version && source $NVM_DIR/nvm.sh && node --version"]
       interval: 30s
       timeout: 10s
       retries: 3
