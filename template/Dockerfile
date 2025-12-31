@@ -154,8 +154,9 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 USER $USERNAME
 
 # Health check - ensuring we're ready to rock
+# Source nvm to make node available in health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python --version && node --version || exit 1
+    CMD /bin/bash -c 'python --version && source $NVM_DIR/nvm.sh && node --version' || exit 1
 
 # Entrypoint auto-installs project dependencies on container start
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
