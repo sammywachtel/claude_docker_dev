@@ -92,8 +92,9 @@ services:
       - docker-dev-network
 
     # Health check to ensure environment is ready
+    # Use build-time nvm path since $HOME differs at runtime
     healthcheck:
-      test: ["CMD", "bash", "-c", "python --version && source $NVM_DIR/nvm.sh && node --version"]
+      test: ["CMD", "bash", "-c", "python --version && source /home/$(whoami)/.nvm/nvm.sh && node --version"]
       interval: 30s
       timeout: 10s
       retries: 3
