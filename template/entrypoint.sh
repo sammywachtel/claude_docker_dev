@@ -22,6 +22,12 @@ if [ -n "$HOME" ] && [ "$HOME" != "/home/$(whoami)" ]; then
         echo "🔗 Creating .ssh symlink for SSH/Git compatibility..."
         ln -s "$HOME/.ssh" "$LINUX_HOME/.ssh"
     fi
+
+    # Fix ownership of cache directories (Docker volumes are created as root)
+    if [ -d "$HOME/.cache" ]; then
+        echo "🔧 Fixing cache directory ownership..."
+        sudo chown -R $(id -u):$(id -g) "$HOME/.cache" 2>/dev/null || true
+    fi
 fi
 
 # Source nvm to make node/npm available
