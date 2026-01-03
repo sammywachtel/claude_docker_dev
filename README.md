@@ -119,7 +119,7 @@ The container mounts your `~/.gitconfig` and `~/.ssh` directories (read-only) so
 
 **⚠️ IMPORTANT**: Run `gh auth login` on your **HOST MACHINE** (your Mac), NOT inside the container! The config is mounted read-only.
 
-**⚠️ macOS ISSUE**: `gh` stores tokens in macOS Keychain by default, which containers can't access. The installer handles this automatically.
+**⚠️ macOS ISSUE**: `gh` stores tokens in macOS Keychain by default, which containers can't access. You need to export the token.
 
 **Note**: GitHub CLI (`gh`) requires separate authentication from SSH keys.
 
@@ -148,28 +148,38 @@ The container mounts your `~/.gitconfig` and `~/.ssh` directories (read-only) so
    # Should show: ✓ Logged in to github.com as YOUR_USERNAME
    ```
 
-2. **Run the installer** - it will automatically set up GitHub CLI for containers:
+2. **Export token to shell profile** (recommended - works across all projects):
    ```bash
-   ./install-docker-dev.sh /path/to/your/project
+   # Get your token
+   gh auth token
 
-   # Installer will prompt:
-   # "Set up GitHub CLI now? (Y/n)"
-   # Press Y to automatically add your token to .env
+   # Add to shell profile (choose one):
+   echo 'export GH_TOKEN=$(gh auth token 2>/dev/null)' >> ~/.zshrc     # macOS/Zsh
+   echo 'export GH_TOKEN=$(gh auth token 2>/dev/null)' >> ~/.bashrc    # Linux/Bash
+
+   # Reload shell
+   source ~/.zshrc   # or source ~/.bashrc
+
+   # Verify
+   echo $GH_TOKEN  # Should show: gho_...
    ```
 
-3. **If you skipped setup or need to add token later**:
-   ```bash
-   # Option A: Rerun the installer (safe - preserves existing .env)
-   ./install-docker-dev.sh /path/to/your/project
-   # Choose "Overwrite" when prompted
-   # Installer will update .env with token
+   **Why shell profile is better:**
+   - ✅ Works for all docker_dev containers automatically
+   - ✅ Keeps secrets out of project repositories
+   - ✅ No need to update `.env` files when token changes
+   - ✅ Single source of truth for your GitHub token
 
-   # Option B: Manually add token
+   **Alternative: Per-project `.env` file** (not recommended):
+   ```bash
+   # Only do this if you can't use shell profile approach
    cd /path/to/your/project
    echo "GH_TOKEN=$(gh auth token)" >> .docker-dev/.env
+   ```
 
-   # Restart container
-   ./.docker-dev/dev restart
+3. **Start or restart container** (token is automatically passed to container):
+   ```bash
+   ./.docker-dev/dev start    # or restart
    ```
 
 4. **Test in container**:
@@ -184,17 +194,16 @@ The container mounts your `~/.gitconfig` and `~/.ssh` directories (read-only) so
 GitHub tokens can expire or you might rotate them for security. To update:
 
 ```bash
-# Option 1: Rerun installer (easiest)
-cd /path/to/your/project
-/path/to/claude-safe-sandbox/install-docker-dev.sh .
-# Choose "Overwrite" when prompted
-# Installer will update .env with new token
+# If using shell profile approach (recommended):
+# Token automatically updates - just reload your shell
+source ~/.zshrc   # or source ~/.bashrc
+./.docker-dev/dev restart  # Restart container to pick up new token
 
-# Option 2: Manually update .env
+# If using .env file approach:
 nano .docker-dev/.env
 # Find the line: GH_TOKEN=gho_old_token
 # Replace with: GH_TOKEN=gho_new_token
-# Or run: gh auth token (on host) and copy new token
+# Or run: echo "GH_TOKEN=$(gh auth token)" > .docker-dev/.env
 
 # Restart container
 ./.docker-dev/dev restart
@@ -202,7 +211,8 @@ nano .docker-dev/.env
 
 **Common Mistakes**:
 - Running `gh auth login` inside container → "read-only file system" error
-- Using Keychain-based auth without adding token to `.env` → "token is invalid" in container
+- Using Keychain-based auth without exporting token → "token is invalid" in container
+- Adding token to `.env` when shell profile is cleaner
 - Always authenticate on host, never in container!
 
 #### Verify Git Configuration
@@ -804,6 +814,203 @@ docker system df          # Check Docker disk usage
 docker system prune       # Clean up Docker (careful!)
 ```
 
+### Playwright Browser Installation Issues
+
+**Symptoms:**
+- `Error: browserType.launch: Executable doesn't exist` when running Playwright tests
+- Playwright install fails with permission errors
+- Browser downloads fail or are incomplete
+
+**Causes:**
+- Cache directory ownership issues (Docker volumes created as root)
+- Missing system dependencies
+- Incomplete browser installation
+
+**How It's Fixed Automatically:**
+
+The container's entrypoint script (`.docker-dev/entrypoint.sh`) automatically:
+
+1. **Fixes cache directory ownership** on startup:
+   ```bash
+   # Runs automatically when container starts
+   sudo chown -R $(id -u):$(id -g) "$HOME/.cache"
+   ```
+
+2. **Auto-installs Playwright browsers** if Playwright is in `package.json`:
+   ```bash
+   # Detected automatically and runs:
+   npx playwright install-deps  # System dependencies
+   npx playwright install        # Browser binaries
+   ```
+
+**Manual Fix (if needed):**
+
+```bash
+# Get a shell
+./.docker-dev/dev shell
+
+# Fix cache directory ownership
+sudo chown -R $(id -u):$(id -g) ~/.cache
+
+# Reinstall Playwright browsers
+npx playwright install-deps
+npx playwright install
+
+# Verify
+npx playwright --version
+```
+
+**Persistent Storage:**
+
+Playwright browsers are stored in a Docker volume (`playwright-cache`) to persist across container restarts:
+- **Volume name**: `{project-name}-playwright-cache`
+- **Mount point**: `~/.cache/ms-playwright`
+- **Automatic**: Ownership fixed on every container start
+
+### Health Check Failures
+
+**Symptoms:**
+- Container shows as "unhealthy" in `docker ps`
+- Warning: "Health check failed" in logs
+
+**What the Health Check Does:**
+
+The health check verifies your development environment is properly configured:
+
+```yaml
+# In docker-compose.yml
+healthcheck:
+  test: ["CMD", "bash", "-c", "python --version && source /home/$(whoami)/.nvm/nvm.sh && node --version"]
+```
+
+This checks:
+1. **Python is available** - `python --version`
+2. **NVM is sourced** - `source /home/$(whoami)/.nvm/nvm.sh`
+3. **Node.js is available** - `node --version`
+
+**Why NVM Sourcing Is Required:**
+
+NVM (Node Version Manager) isn't in the system PATH by default. The health check must source `nvm.sh` to make `node` available:
+
+- ✅ **Correct**: `source /home/$(whoami)/.nvm/nvm.sh && node --version`
+- ❌ **Fails**: `node --version` (nvm not sourced, node not found)
+
+**The Build-Time Path Issue:**
+
+The health check uses `/home/$(whoami)/.nvm/nvm.sh` (build-time path) instead of `$NVM_DIR/nvm.sh` (runtime variable) because:
+- `$NVM_DIR` is set at container runtime (after build)
+- Health checks run with Docker's environment, not the container's shell environment
+- Using the absolute path ensures the health check works reliably
+
+**Debugging Failed Health Checks:**
+
+```bash
+# Check health check status
+docker ps
+# Look for "unhealthy" in STATUS column
+
+# View detailed health check logs
+./.docker-dev/dev logs | grep health
+
+# Manually run the health check
+./.docker-dev/dev exec bash -c "python --version && source /home/\$(whoami)/.nvm/nvm.sh && node --version"
+
+# If Python fails:
+./.docker-dev/dev exec which python
+./.docker-dev/dev rebuild  # Rebuild image
+
+# If Node fails:
+./.docker-dev/dev exec bash -c "source /home/\$(whoami)/.nvm/nvm.sh && node --version"
+./.docker-dev/dev exec ls -la /home/\$(whoami)/.nvm/  # Check nvm installation
+```
+
+**When to Worry:**
+
+- ⚠️ **Unhealthy container** - Development tools may not work correctly
+- ✅ **Starting** - Normal during container startup (10 second grace period)
+- ✅ **Healthy** - Everything working correctly
+
+If health checks consistently fail, rebuild the container:
+```bash
+./.docker-dev/dev rebuild
+```
+
+### Cache Directory Ownership Issues
+
+**Symptoms:**
+- Permission denied errors when installing packages
+- `EACCES` errors from npm
+- Pip install fails with permission errors
+
+**Root Cause:**
+
+Docker creates volumes as `root:root` by default, but the container runs as your host user (non-root). This causes permission conflicts when tools try to write to cache directories.
+
+**How It's Fixed Automatically:**
+
+The entrypoint script fixes ownership on every container start:
+
+```bash
+# From .docker-dev/entrypoint.sh (runs automatically)
+if [ -d "$HOME/.cache" ]; then
+    echo "🔧 Fixing cache directory ownership..."
+    sudo chown -R $(id -u):$(id -g) "$HOME/.cache" 2>/dev/null || true
+fi
+```
+
+**What Caches Are Managed:**
+
+The container uses persistent Docker volumes for these caches:
+
+| Cache Type | Volume Name | Mount Point | Purpose |
+|------------|-------------|-------------|---------|
+| **pip** | `{project}-pip-cache` | `~/.cache/pip` | Python packages |
+| **npm** | `{project}-npm-cache` | `~/.npm` | Node packages |
+| **Playwright** | `{project}-playwright-cache` | `~/.cache/ms-playwright` | Browser binaries |
+| **pre-commit** | `{project}-pre-commit-cache` | `~/.cache/pre-commit` | Git hooks |
+| **Claude CLI** | Host directory | `~/.cache/claude-cli-nodejs` | MCP logs |
+| **GitHub CLI** | Host directory | `~/.cache/gh` | API responses |
+
+**Benefits of Volume Caching:**
+
+- ✅ **Faster installs** - Packages cached between container restarts
+- ✅ **Persistent** - Survives `restart` command
+- ✅ **Isolated** - Each project has its own caches
+- ✅ **Automatic cleanup** - Removed with `./dev clean`
+
+**Manual Ownership Fix:**
+
+```bash
+# If you still see permission errors:
+./.docker-dev/dev shell
+sudo chown -R $(id -u):$(id -g) ~/.cache
+sudo chown -R $(id -u):$(id -g) ~/.npm
+
+# Or rebuild to reset everything:
+./.docker-dev/dev rebuild
+```
+
+**Shadowed Volumes:**
+
+The installer also creates "shadowed volumes" for `node_modules` and `.venv` to prevent binary incompatibility between macOS and Linux:
+
+```yaml
+# In docker-compose.yml (auto-generated by installer)
+volumes:
+  - /path/to/project/node_modules  # Anonymous volume
+  - /path/to/project/.venv          # Anonymous volume
+```
+
+These are also fixed on startup:
+```bash
+# From entrypoint.sh
+find "$PROJECT_DIR" -maxdepth 3 -type d \( -name "node_modules" -o -name ".venv" \) | while read dir; do
+    if [ ! -w "$dir" ]; then
+        sudo chown -R $(id -u):$(id -g) "$dir"
+    fi
+done
+```
+
 ### Need Fresh Start
 
 ```bash
@@ -895,20 +1102,49 @@ MIT License - Use freely, modify as needed, no warranty provided.
 
 ---
 
+## 📚 Documentation
+
+This project uses the [Diátaxis framework](https://diataxis.fr/) to organize documentation by learning purpose.
+
+**[📖 Browse All Documentation →](docs/)**
+
+### Quick Links by Purpose
+
+**New to docker_dev?**
+- [🎓 Getting Started Tutorial](docs/tutorials/getting-started.md) - Step-by-step first setup
+
+**Need to solve a problem?**
+- [🛠️ How-To Guides](docs/how-to/) - Task-oriented solutions
+  - [Set Up GitHub CLI](docs/how-to/setup-github-cli.md)
+  - [Troubleshooting Guide](docs/how-to/troubleshooting.md)
+
+**Looking up commands or configuration?**
+- [📖 Reference Documentation](docs/reference/) - Technical specifications
+  - [Command Reference](docs/reference/commands.md)
+  - [Configuration Options](docs/reference/configuration.md)
+
+**Want to understand the architecture?**
+- [💡 Explanation](docs/explanation/) - Understanding-oriented
+  - [Design Philosophy](docs/explanation/design-philosophy.md)
+  - [Security Model](docs/explanation/security-model.md)
+
+### Legacy Documentation
+
+- **This README**: Overview and quick start (you're reading it)
+- **[SSH_CONFIG_GUIDE.md](SSH_CONFIG_GUIDE.md)**: Detailed SSH setup for macOS/Docker
+- **`.docker-dev/README.md`**: Per-project usage (created after installation)
+
+---
+
 ## 🤝 Support
-
-### Documentation
-
-- **This README**: Overview and quick start
-- **`.docker-dev/README.md`**: Detailed usage after installation
-- **`.docker-dev/scripts/health-check.sh`**: Verify environment setup
 
 ### Getting Help
 
-1. Check `.docker-dev/README.md` in your installed project
-2. Run `./.docker-dev/dev logs` to see errors
-3. Review the Troubleshooting section above
-4. Ensure Docker Desktop is running
+1. **Start here**: [Getting Started Tutorial](docs/tutorials/getting-started.md)
+2. **Common issues**: [Troubleshooting Guide](docs/how-to/troubleshooting.md)
+3. **Check container logs**: `./.docker-dev/dev logs`
+4. **Verify setup**: `./.docker-dev/scripts/health-check.sh`
+5. **Ensure Docker is running**: Docker Desktop should be active
 
 ### Contributing
 
