@@ -132,10 +132,12 @@ case "${1:-help}" in
         source .env 2>/dev/null || true
         WORK_DIR="${PROJECT_PATH:-/workspace}"
 
-        # Source nvm from build location (not $HOME which may differ at runtime)
-        # Claude Code is installed in the container via npm during docker build
-        # npm creates the binary as 'claude' not 'claude-code'
-        docker compose exec devenv /bin/bash -c "source /home/\$(whoami)/.nvm/nvm.sh && cd '$WORK_DIR' && claude --dangerously-skip-permissions"
+        # Source bashrc to get PATH updates (includes nvm and ~/.local/bin for Claude)
+        # Claude Code is installed in the container via native installer during docker build
+        # Native installer installs to ~/.local/bin
+        # Note: Add both build-time path (/home/user/.local/bin) and runtime $HOME/.local/bin
+        # to suppress Claude's PATH warning (it checks for $HOME/.local/bin)
+        docker compose exec devenv /bin/bash -c "export PATH=\"\$HOME/.local/bin:\$PATH\" && source /home/\$(whoami)/.bashrc && cd '$WORK_DIR' && claude --dangerously-skip-permissions"
         ;;
 
     exec|run)

@@ -115,27 +115,42 @@ RUN . "$NVM_DIR/nvm.sh" \
 #     && flutter precache \
 #     && flutter doctor
 
-# 🤖 Claude Code CLI: Install via npm
+# 🤖 Claude Code CLI: Install via native installer
 USER $USERNAME
 
-# Install Claude Code and Playwright globally via npm
+# Install Claude Code using the official native installer
+# Native installer handles binary installation, PATH setup, and auto-updates
+RUN curl -fsSL https://claude.ai/install.sh | bash \
+    && echo "Claude Code native installer completed"
+
+# Ensure ~/.local/bin is in PATH (native installer adds it to bashrc, but make it explicit)
+# Add to bashrc for interactive shells
+RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+
+# CRITICAL: Also set as ENV for non-interactive shells (docker exec uses non-interactive by default)
+# This must come AFTER the native installer runs, so Claude is already in ~/.local/bin
+# Note: We hardcode /home/$USERNAME path (build-time) because $HOME changes at runtime (docker-compose overrides it)
+# But we can't use $HOME in ENV since it's evaluated at build time, so we just use the literal build path
+ENV PATH="/home/$USERNAME/.local/bin:$PATH"
+
+# Install Playwright globally via npm (separate from Claude)
 RUN . "$NVM_DIR/nvm.sh" \
-    && npm install -g @anthropic-ai/claude-code playwright \
-    && echo "Claude Code and Playwright installed successfully"
+    && npm install -g playwright \
+    && echo "Playwright installed successfully"
 
 # Install Playwright browsers (Chromium and Firefox)
+# Note: --with-deps requires sudo, so we need to handle system deps separately
+USER root
 RUN . "$NVM_DIR/nvm.sh" \
-    && npx playwright install --with-deps chromium firefox \
+    && npx playwright install-deps chromium firefox
+USER $USERNAME
+RUN . "$NVM_DIR/nvm.sh" \
+    && npx playwright install chromium firefox \
     && echo "Playwright browsers installed"
 
 # Time to tackle the tricky bit: Configure Claude Code with bypass permissions
 RUN mkdir -p /home/$USERNAME/.claude \
     && echo '{"bypass_permissions": true}' > /home/$USERNAME/.claude/settings.json
-
-# Make sure claude-code is accessible via simple 'claude' command
-RUN . "$NVM_DIR/nvm.sh" \
-    && CLAUDE_PATH=$(which claude-code) \
-    && ln -sf "$CLAUDE_PATH" "$(dirname $CLAUDE_PATH)/claude" || true
 
 # 🎨 Shell customization: Add helpful aliases and prompt
 RUN echo 'alias ll="ls -lah"' >> ~/.bashrc \
