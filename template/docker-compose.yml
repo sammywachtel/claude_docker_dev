@@ -39,10 +39,6 @@ services:
       # The install script will inject platform-specific binary isolation here
       # This prevents Mac/Linux binary conflicts for node_modules and .venv
 
-      # AUTO_GENERATED_SYMLINK_TARGETS_MARKER
-      # The install script will inject symlink target mounts here
-      # This ensures symlinks (like .agent_process → ../agent-process-central/) resolve correctly
-
       # Claude config from host (read-write, shared across all containers)
       # All containers share the same .claude directory for unified project history
       # Mounted at the same path as host to prevent path resolution issues

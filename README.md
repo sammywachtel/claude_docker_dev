@@ -559,28 +559,6 @@ volumes:
 - ✅ No sync issues or file copying
 - ✅ Git works from both host and container
 
-### Symlink Support
-
-The installer **automatically detects symlinks** that point outside your project and mounts their targets:
-
-```
-your-project/
-├── .agent_process -> ../agent-process-central/your-project/  ← Symlink detected!
-└── src/
-
-agent-process-central/
-└── your-project/  ← Auto-mounted in container
-```
-
-This is useful for:
-- Centralized process tracking (`.agent_process` in a shared location)
-- Shared resources across multiple projects
-- External configuration directories
-
-**Re-run the installer** after adding new symlinks to update the mounts.
-
-See [How to Mount Symlinked Directories](docs/how-to/mount-symlinked-directories.md) for details.
-
 ### Security Through Isolation
 
 ```yaml

@@ -75,59 +75,6 @@ detect_venv_locations() {
     done | sort -u  # Remove duplicates if multiple Python files in same dir
 }
 
-# 🔗 Symlink detection: Find symlinks that point outside the project directory
-# Docker doesn't automatically mount symlink targets, so we need to detect and mount them
-# Common case: .agent_process -> ../agent-process-central/project-name/
-detect_external_symlinks() {
-    local target_dir="$1"
-    local symlinks_found=()
-
-    # Find all symlinks in the project root (not recursively, to avoid false positives)
-    while IFS= read -r -d '' symlink; do
-        if [ -L "$symlink" ]; then
-            # Get the absolute path of the symlink target
-            local link_target
-            if [[ "$OSTYPE" == "darwin"* ]]; then
-                # macOS: use readlink without -f, then resolve manually
-                link_target=$(cd "$(dirname "$symlink")" && cd "$(readlink "$symlink")" 2>/dev/null && pwd)
-            else
-                # Linux: readlink -f resolves the full path
-                link_target=$(readlink -f "$symlink" 2>/dev/null)
-            fi
-
-            # Check if the target is outside the project directory
-            if [ -n "$link_target" ] && [[ ! "$link_target" == "$target_dir"* ]]; then
-                echo "$link_target"
-            fi
-        fi
-    done < <(find "$target_dir" -maxdepth 1 -type l -print0 2>/dev/null)
-}
-
-generate_symlink_target_mounts() {
-    local target_dir="$1"
-    local mounts=""
-    local count=0
-
-    # Start with header comment
-    mounts+="      # Auto-generated symlink target mounts\n"
-    mounts+="      # Ensures symlinks pointing outside the project resolve correctly in container\n"
-
-    # Collect external symlink targets
-    while IFS= read -r link_target; do
-        if [ -n "$link_target" ] && [ -d "$link_target" ]; then
-            mounts+="      - $link_target:$link_target:rw\n"
-            count=$((count + 1))
-        fi
-    done < <(detect_external_symlinks "$target_dir")
-
-    if [ $count -eq 0 ]; then
-        mounts+="      # No external symlinks detected\n"
-    fi
-
-    echo -e "$mounts"
-    echo "$count"  # Return count on last line for caller to capture
-}
-
 generate_volume_overrides() {
     local target_dir="$1"
     local overrides=""
@@ -238,41 +185,6 @@ if [[ -f "$COMPOSE_FILE" ]]; then
         success "Auto-configured $OVERRIDE_COUNT binary isolation volume(s)"
     else
         info "No Node.js or Python projects detected (volumes can be added manually later)"
-    fi
-
-    # 🔗 Symlink target detection: Mount directories that symlinks point to
-    info "Detecting external symlinks for volume mounting..."
-    SYMLINK_MOUNTS_OUTPUT=$(generate_symlink_target_mounts "$TARGET_DIR")
-    # Last line is the count, everything else is the mounts
-    SYMLINK_COUNT=$(echo "$SYMLINK_MOUNTS_OUTPUT" | tail -n 1)
-    SYMLINK_MOUNTS=$(echo "$SYMLINK_MOUNTS_OUTPUT" | sed '$d')
-
-    # Write symlink mounts to temporary file
-    TEMP_SYMLINKS=$(mktemp)
-    echo -e "$SYMLINK_MOUNTS" > "$TEMP_SYMLINKS"
-
-    # Replace symlink marker with generated mounts
-    awk -v mounts_file="$TEMP_SYMLINKS" '
-        /AUTO_GENERATED_SYMLINK_TARGETS_MARKER/ {
-            # Read and print mounts from file
-            while ((getline line < mounts_file) > 0) {
-                print line
-            }
-            close(mounts_file)
-            # Skip the next two lines (the comments after the marker)
-            getline; getline
-            next
-        }
-        { print }
-    ' "$COMPOSE_FILE" > "$COMPOSE_FILE.tmp" && mv "$COMPOSE_FILE.tmp" "$COMPOSE_FILE"
-
-    rm -f "$TEMP_SYMLINKS"
-
-    if [[ "$SYMLINK_COUNT" -gt 0 ]]; then
-        success "Auto-configured $SYMLINK_COUNT symlink target mount(s)"
-        info "Symlinks pointing outside the project will now resolve correctly in container"
-    else
-        info "No external symlinks detected"
     fi
 else
     warning "docker-compose.yml not found, skipping volume override injection"
