@@ -75,6 +75,49 @@ detect_venv_locations() {
     done | sort -u  # Remove duplicates if multiple Python files in same dir
 }
 
+# 🔗 Agent process detection: If .agent_process is a symlink, mount the parent directory
+# This allows full git access to the agent-process-central repo
+detect_agent_process_central() {
+    local target_dir="$1"
+    local agent_process="$target_dir/.agent_process"
+
+    # Check if .agent_process is a symlink
+    if [ -L "$agent_process" ]; then
+        # Resolve the symlink target
+        local link_target
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            # macOS: resolve manually
+            link_target=$(cd "$(dirname "$agent_process")" && cd "$(readlink "$agent_process")" 2>/dev/null && pwd)
+        else
+            # Linux: readlink -f
+            link_target=$(readlink -f "$agent_process" 2>/dev/null)
+        fi
+
+        # Get the parent directory (agent-process-central, not the project subfolder)
+        if [ -n "$link_target" ] && [ -d "$link_target" ]; then
+            dirname "$link_target"
+        fi
+    fi
+}
+
+generate_agent_process_mount() {
+    local target_dir="$1"
+    local mount=""
+
+    local agent_central=$(detect_agent_process_central "$target_dir")
+
+    if [ -n "$agent_central" ] && [ -d "$agent_central" ]; then
+        mount+="      # Auto-generated: mount agent-process-central for .agent_process symlink\n"
+        mount+="      - $agent_central:$agent_central:rw\n"
+        echo -e "$mount"
+        echo "1"  # Found
+    else
+        mount+="      # No .agent_process symlink detected\n"
+        echo -e "$mount"
+        echo "0"  # Not found
+    fi
+}
+
 generate_volume_overrides() {
     local target_dir="$1"
     local overrides=""
@@ -185,6 +228,34 @@ if [[ -f "$COMPOSE_FILE" ]]; then
         success "Auto-configured $OVERRIDE_COUNT binary isolation volume(s)"
     else
         info "No Node.js or Python projects detected (volumes can be added manually later)"
+    fi
+
+    # 🔗 Agent process mount: If .agent_process symlink exists, mount parent directory
+    info "Checking for .agent_process symlink..."
+    AGENT_MOUNT_OUTPUT=$(generate_agent_process_mount "$TARGET_DIR")
+    AGENT_FOUND=$(echo "$AGENT_MOUNT_OUTPUT" | tail -n 1)
+    AGENT_MOUNT=$(echo "$AGENT_MOUNT_OUTPUT" | sed '$d')
+
+    TEMP_AGENT=$(mktemp)
+    echo -e "$AGENT_MOUNT" > "$TEMP_AGENT"
+
+    awk -v mount_file="$TEMP_AGENT" '
+        /AUTO_GENERATED_AGENT_PROCESS_MARKER/ {
+            while ((getline line < mount_file) > 0) {
+                print line
+            }
+            close(mount_file)
+            getline  # Skip the comment line after marker
+            next
+        }
+        { print }
+    ' "$COMPOSE_FILE" > "$COMPOSE_FILE.tmp" && mv "$COMPOSE_FILE.tmp" "$COMPOSE_FILE"
+
+    rm -f "$TEMP_AGENT"
+
+    if [[ "$AGENT_FOUND" -eq 1 ]]; then
+        AGENT_CENTRAL=$(detect_agent_process_central "$TARGET_DIR")
+        success "Auto-configured mount for agent-process-central: $AGENT_CENTRAL"
     fi
 else
     warning "docker-compose.yml not found, skipping volume override injection"

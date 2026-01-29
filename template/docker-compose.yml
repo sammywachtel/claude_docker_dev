@@ -39,6 +39,9 @@ services:
       # The install script will inject platform-specific binary isolation here
       # This prevents Mac/Linux binary conflicts for node_modules and .venv
 
+      # AUTO_GENERATED_AGENT_PROCESS_MARKER
+      # If .agent_process symlink exists, mount the agent-process-central directory
+
       # Claude config from host (read-write, shared across all containers)
       # All containers share the same .claude directory for unified project history
       # Mounted at the same path as host to prevent path resolution issues

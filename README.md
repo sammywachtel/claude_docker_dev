@@ -559,6 +559,17 @@ volumes:
 - ✅ No sync issues or file copying
 - ✅ Git works from both host and container
 
+### Agent Process Symlink Support
+
+If your project uses a symlinked `.agent_process` directory pointing to a centralized location:
+
+```bash
+# Example setup
+ln -s ../agent-process-central/my-project .agent_process
+```
+
+The installer **automatically detects this** and mounts the entire `agent-process-central` directory, giving you full git access to that repo from inside the container.
+
 ### Security Through Isolation
 
 ```yaml
