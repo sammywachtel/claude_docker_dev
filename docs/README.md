@@ -18,6 +18,7 @@ Solutions to specific problems with practical steps assuming basic knowledge.
 
 - [Set Up SSH Keys for GitHub](how-to/setup-ssh-keys.md)
 - [Configure GitHub CLI Authentication](how-to/setup-github-cli.md)
+- [Mount Symlinked Directories](how-to/mount-symlinked-directories.md)
 - [Add Custom Packages](how-to/add-packages.md)
 - [Troubleshoot Common Issues](how-to/troubleshooting.md)
 
