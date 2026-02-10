@@ -1,7 +1,7 @@
 # 🎯 Docker Dev Environment - All Tools, Zero Guessing
 # Single image with Python, Node, Flutter, Claude Code, and all dev tools ready to go
 
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 # Kickoff: Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -10,19 +10,16 @@ ENV DEBIAN_FRONTEND=noninteractive \
     TERM=xterm-256color
 
 # Main play: Install system essentials and build tools
+# NOTE: No inline comments inside RUN — older Docker engines pass them to the
+# shell where '#' becomes a comment and silently eats the rest of the command.
 RUN apt-get update && apt-get install -y \
-    # Core utilities
     curl wget git jq unzip zip \
     build-essential cmake pkg-config \
     ca-certificates gnupg \
-    # Modern CLI tools for better dev experience
     ripgrep fd-find bat \
-    # Python build dependencies
     libssl-dev zlib1g-dev libbz2-dev libreadline-dev \
     libsqlite3-dev libffi-dev liblzma-dev \
-    # Java (required by some Node.js packages like node-plantuml)
     default-jre-headless \
-    # Additional useful tools
     vim nano less tree \
     && rm -rf /var/lib/apt/lists/*
 
