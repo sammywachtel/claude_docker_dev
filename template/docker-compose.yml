@@ -29,6 +29,10 @@ services:
       - SSH_AUTH_SOCK=${SSH_AUTH_SOCK:-/ssh-agent}
       # GitHub CLI token (alternative to file-based auth)
       - GH_TOKEN=${GH_TOKEN:-}
+      # Google Cloud project and region (for Vertex AI, Gemini, etc.)
+      # Set these in .env if your project uses GCP services
+      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-}
+      - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-}
 
     volumes:
       # Main play: Mount project at the SAME path as on host
@@ -72,6 +76,10 @@ services:
       # GitHub CLI config (read-only)
       # Run 'gh auth login' on host first, then config is shared with containers
       - ${HOME}/.config/gh:${HOME}/.config/gh:ro
+
+      # Google Cloud SDK config (read-only) — needed for Vertex AI / Gemini credentials
+      # Run 'gcloud auth application-default login' on host first
+      - ${HOME}/.config/gcloud:${HOME}/.config/gcloud:ro
 
       # SSH agent forwarding (enables password-protected keys via macOS keychain)
       # If SSH_AUTH_SOCK is not set, this creates an empty mount (SSH will still work without agent)
