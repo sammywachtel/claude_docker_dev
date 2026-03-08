@@ -338,6 +338,39 @@ if [[ -f "$ENV_EXAMPLE" ]] && [[ ! -f "$ENV_FILE" ]]; then
         PORT_OFFSET=$((16#$(echo -n "$PROJECT_NAME" | md5sum | cut -c1-2) % 100))
     fi
 
+    # Verify the chosen ports are actually free — the hash picks a starting
+    # point, but something else on the machine may already own that port.
+    # If any of the 4 ports are taken, bump the offset and try again.
+    port_in_use() {
+        lsof -iTCP:"$1" -sTCP:LISTEN -t >/dev/null 2>&1
+    }
+
+    ports_all_free() {
+        local offset=$1
+        port_in_use $((8000 + offset)) && return 1
+        port_in_use $((3000 + offset)) && return 1
+        port_in_use $((5173 + offset)) && return 1
+        port_in_use $((8080 + offset)) && return 1
+        return 0
+    }
+
+    INITIAL_OFFSET=$PORT_OFFSET
+    MAX_ATTEMPTS=100
+    ATTEMPT=0
+    while ! ports_all_free "$PORT_OFFSET"; do
+        PORT_OFFSET=$(( (PORT_OFFSET + 1) % 100 ))
+        ATTEMPT=$((ATTEMPT + 1))
+        if [[ $ATTEMPT -ge $MAX_ATTEMPTS ]]; then
+            warning "Could not find 4 free ports after $MAX_ATTEMPTS attempts — using offset $INITIAL_OFFSET anyway"
+            PORT_OFFSET=$INITIAL_OFFSET
+            break
+        fi
+    done
+
+    if [[ $PORT_OFFSET -ne $INITIAL_OFFSET ]]; then
+        info "Hash-based offset $INITIAL_OFFSET had port conflicts, bumped to $PORT_OFFSET"
+    fi
+
     # Populate with current user info, project name, and absolute path
     if [[ "$OSTYPE" == "darwin"* ]]; then
         sed -i '' "s/HOST_UID=1000/HOST_UID=$(id -u)/" "$ENV_FILE"
