@@ -16,6 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Added [Documentation Index](docs/README.md) - Navigation hub for all documentation
 
 ### Fixed
+- **Claude Code install broken in Docker** — The native installer (`claude.ai/install.sh`) fails silently during `docker build`, leaving no `claude` binary in the container. Switched to `npm install -g @anthropic-ai/claude-code` which installs reliably and lands in the nvm bin directory (already on PATH). Updated the `dev claude` command to source nvm instead of the now-unnecessary `$HOME/.local/bin` PATH hack.
+- **Node.js missing from PATH in non-interactive shells** — Docker `ENV` doesn't support `$(command substitution)`, so the old `ENV PATH="$NVM_DIR/versions/node/$(ls ...)/bin:$PATH"` baked a literal string into PATH instead of resolving it. Fixed by creating a stable symlink (`$NVM_DIR/default_bin`) at build time that `ENV` can reference.
 - **Documentation Drift Issues**:
   - Documented Playwright cache ownership fix (commit e4769be) in Troubleshooting section
   - Documented health check NVM sourcing behavior (commits 5b13cb7, d31a96f) in Troubleshooting section

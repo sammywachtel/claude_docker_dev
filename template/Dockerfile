@@ -84,7 +84,10 @@ RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | b
     && nvm alias default $NODE_VERSION \
     && nvm use default
 
-ENV PATH="$NVM_DIR/versions/node/$(ls $NVM_DIR/versions/node | head -1)/bin:$PATH"
+# Docker ENV doesn't support $(command substitution), so we resolve the node path
+# at build time via a symlink that ENV *can* reference
+RUN . "$NVM_DIR/nvm.sh" && ln -sf "$(dirname $(which node))" "$NVM_DIR/default_bin"
+ENV PATH="$NVM_DIR/default_bin:$PATH"
 
 # Install global Node.js dev tools
 RUN . "$NVM_DIR/nvm.sh" \
@@ -112,23 +115,16 @@ RUN . "$NVM_DIR/nvm.sh" \
 #     && flutter precache \
 #     && flutter doctor
 
-# 🤖 Claude Code CLI: Install via native installer
+# 🤖 Claude Code CLI: Install via npm (reliable in Docker, unlike the native installer
+# which fails silently in non-interactive build contexts)
 USER $USERNAME
 
-# Install Claude Code using the official native installer
-# Native installer handles binary installation, PATH setup, and auto-updates
-RUN curl -fsSL https://claude.ai/install.sh | bash \
-    && echo "Claude Code native installer completed"
-
-# Ensure ~/.local/bin is in PATH (native installer adds it to bashrc, but make it explicit)
-# Add to bashrc for interactive shells
-RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-
-# CRITICAL: Also set as ENV for non-interactive shells (docker exec uses non-interactive by default)
-# This must come AFTER the native installer runs, so Claude is already in ~/.local/bin
-# Note: We hardcode /home/$USERNAME path (build-time) because $HOME changes at runtime (docker-compose overrides it)
-# But we can't use $HOME in ENV since it's evaluated at build time, so we just use the literal build path
-ENV PATH="/home/$USERNAME/.local/bin:$PATH"
+# Install Claude Code as a global npm package — no PATH shenanigans needed,
+# it lands right next to node/npm in the nvm bin directory (already on PATH)
+RUN . "$NVM_DIR/nvm.sh" \
+    && npm install -g @anthropic-ai/claude-code \
+    && claude --version \
+    && echo "Claude Code installed successfully"
 
 # Install Playwright globally via npm (separate from Claude)
 RUN . "$NVM_DIR/nvm.sh" \
@@ -145,7 +141,7 @@ RUN . "$NVM_DIR/nvm.sh" \
     && npx playwright install chromium firefox \
     && echo "Playwright browsers installed"
 
-# Time to tackle the tricky bit: Configure Claude Code with bypass permissions
+# Configure Claude Code with bypass permissions
 RUN mkdir -p /home/$USERNAME/.claude \
     && echo '{"bypass_permissions": true}' > /home/$USERNAME/.claude/settings.json
 
