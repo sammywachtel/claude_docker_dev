@@ -41,6 +41,13 @@ case "${1:-help}" in
     start)
         info "Starting Docker Dev Environment..."
 
+        # Ensure shared cache volumes exist (external volumes aren't auto-created)
+        for vol in docker-dev-shared-pip-cache docker-dev-shared-npm-cache \
+                   docker-dev-shared-flutter-cache docker-dev-shared-pre-commit-cache \
+                   docker-dev-shared-playwright-cache; do
+            docker volume create "$vol" &>/dev/null
+        done
+
         # Verify the shared base image exists before trying to build
         if ! docker image inspect docker-dev-base:latest &>/dev/null; then
             error "Base image 'docker-dev-base:latest' not found"

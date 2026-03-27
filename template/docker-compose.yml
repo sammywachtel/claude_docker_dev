@@ -120,23 +120,24 @@ services:
     restart: unless-stopped
 
 # Persistent volumes for caches (shared across all docker-dev projects)
-# No project prefix — pip, npm, etc. caches are the same regardless of project
+# external: true tells Compose these aren't owned by any single project —
+# whichever project starts first creates them, the rest just use them
 volumes:
   pip-cache:
-    driver: local
     name: docker-dev-shared-pip-cache
+    external: true
   npm-cache:
-    driver: local
     name: docker-dev-shared-npm-cache
+    external: true
   flutter-cache:
-    driver: local
     name: docker-dev-shared-flutter-cache
+    external: true
   pre-commit-cache:
-    driver: local
     name: docker-dev-shared-pre-commit-cache
+    external: true
   playwright-cache:
-    driver: local
     name: docker-dev-shared-playwright-cache
+    external: true
 
 # Network for potential multi-container setups (project-specific)
 networks:

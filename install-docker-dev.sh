@@ -218,6 +218,15 @@ else
     success "Base image built"
 fi
 
+# 📦 Ensure shared cache volumes exist (external volumes must be pre-created)
+info "Ensuring shared cache volumes exist..."
+for vol in docker-dev-shared-pip-cache docker-dev-shared-npm-cache \
+           docker-dev-shared-flutter-cache docker-dev-shared-pre-commit-cache \
+           docker-dev-shared-playwright-cache; do
+    docker volume create "$vol" &>/dev/null
+done
+success "Shared cache volumes ready"
+
 info "Copying .docker-dev/ template..."
 cp -r "$TEMPLATE_DIR" "$TARGET_DIR/.docker-dev"
 success "Template copied"
