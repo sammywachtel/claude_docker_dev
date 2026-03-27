@@ -174,6 +174,26 @@ if [[ -d "$TARGET_DIR/.docker-dev" ]]; then
         info "Installation cancelled"
         exit 0
     fi
+    # Stop any running container before removing files
+    if [[ -f "$TARGET_DIR/.docker-dev/.env" ]]; then
+        source "$TARGET_DIR/.docker-dev/.env" 2>/dev/null || true
+        OLD_PROJECT_NAME="${PROJECT_NAME:-project}"
+
+        info "Stopping existing container if running..."
+        (cd "$TARGET_DIR/.docker-dev" && docker compose down 2>/dev/null) || true
+
+        # Clean up old per-project cache volumes (replaced by shared volumes)
+        info "Cleaning up old per-project cache volumes..."
+        for suffix in pip-cache npm-cache flutter-cache pre-commit-cache playwright-cache; do
+            OLD_VOL="${OLD_PROJECT_NAME}-${suffix}"
+            if docker volume inspect "$OLD_VOL" &>/dev/null 2>&1; then
+                docker volume rm "$OLD_VOL" 2>/dev/null && \
+                    success "Removed orphaned volume: $OLD_VOL" || \
+                    warning "Could not remove volume: $OLD_VOL (may be in use)"
+            fi
+        done
+    fi
+
     rm -rf "$TARGET_DIR/.docker-dev"
 fi
 
@@ -185,6 +205,17 @@ if [[ ! -d "$TEMPLATE_DIR" ]]; then
     error "Template directory not found: $TEMPLATE_DIR"
     error "Make sure you're running this from the claude-safe-sandbox project"
     exit 1
+fi
+
+# 🏗️ Ensure the shared base image exists (the expensive part, done once)
+info "Checking for shared base image (docker-dev-base:latest)..."
+if docker image inspect docker-dev-base:latest &>/dev/null; then
+    CREATED=$(docker image inspect docker-dev-base:latest --format '{{.Created}}' | cut -d'T' -f1)
+    success "Base image found (built: $CREATED)"
+else
+    warning "Base image not found — building it now (this takes a while the first time)..."
+    "$SCRIPT_DIR/build-base.sh" --force
+    success "Base image built"
 fi
 
 info "Copying .docker-dev/ template..."
@@ -257,6 +288,54 @@ if [[ -f "$COMPOSE_FILE" ]]; then
         AGENT_CENTRAL=$(detect_agent_process_central "$TARGET_DIR")
         success "Auto-configured mount for agent-process-central: $AGENT_CENTRAL"
     fi
+
+    # 🧪 BEADS config: Only mount credentials and set env var if ~/.config/beads exists on host
+    info "Checking for BEADS credentials..."
+    BEADS_CONFIG_DIR="$HOME/.config/beads"
+
+    if [[ -d "$BEADS_CONFIG_DIR" ]]; then
+        BEADS_ENV="      # BEADS Dolt server — containers can't reach host via 127.0.0.1\n      - BEADS_DOLT_SERVER_HOST=host.docker.internal"
+        BEADS_MOUNT="      # BEADS credentials (read-only) — bd reads this natively for Dolt auth\n      - \${HOME}/.config/beads:\${HOME}/.config/beads:ro"
+        success "BEADS credentials found at $BEADS_CONFIG_DIR — adding env var and mount"
+    else
+        BEADS_ENV="      # No BEADS credentials found at ~/.config/beads — skipping"
+        BEADS_MOUNT="      # No BEADS credentials found — skipping mount"
+        info "No BEADS credentials at $BEADS_CONFIG_DIR (skipping env var and mount)"
+    fi
+
+    # Inject BEADS env var
+    TEMP_BEADS_ENV=$(mktemp)
+    echo -e "$BEADS_ENV" > "$TEMP_BEADS_ENV"
+
+    awk -v inject_file="$TEMP_BEADS_ENV" '
+        /AUTO_GENERATED_BEADS_ENV_MARKER/ {
+            while ((getline line < inject_file) > 0) {
+                print line
+            }
+            close(inject_file)
+            getline  # Skip the comment line after marker
+            next
+        }
+        { print }
+    ' "$COMPOSE_FILE" > "$COMPOSE_FILE.tmp" && mv "$COMPOSE_FILE.tmp" "$COMPOSE_FILE"
+    rm -f "$TEMP_BEADS_ENV"
+
+    # Inject BEADS mount
+    TEMP_BEADS_MOUNT=$(mktemp)
+    echo -e "$BEADS_MOUNT" > "$TEMP_BEADS_MOUNT"
+
+    awk -v inject_file="$TEMP_BEADS_MOUNT" '
+        /AUTO_GENERATED_BEADS_MOUNT_MARKER/ {
+            while ((getline line < inject_file) > 0) {
+                print line
+            }
+            close(inject_file)
+            getline  # Skip the comment line after marker
+            next
+        }
+        { print }
+    ' "$COMPOSE_FILE" > "$COMPOSE_FILE.tmp" && mv "$COMPOSE_FILE.tmp" "$COMPOSE_FILE"
+    rm -f "$TEMP_BEADS_MOUNT"
 else
     warning "docker-compose.yml not found, skipping volume override injection"
 fi

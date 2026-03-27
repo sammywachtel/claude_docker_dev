@@ -1,0 +1,115 @@
+# 🏗️ Docker Dev Base Image - The Heavy Lifting, Done Once
+# All the expensive installs (Python versions, Node, Playwright browsers, Claude Code)
+# live here so they're shared across every project container.
+# Build with: ./build-base.sh
+# Per-project Dockerfiles just FROM this and add user mapping.
+
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    TERM=xterm-256color
+
+# System essentials and build tools
+RUN apt-get update && apt-get install -y \
+    curl wget git jq unzip zip \
+    build-essential cmake pkg-config \
+    ca-certificates gnupg \
+    ripgrep fd-find bat \
+    libssl-dev zlib1g-dev libbz2-dev libreadline-dev \
+    libsqlite3-dev libffi-dev liblzma-dev \
+    default-jre-headless \
+    vim nano less tree \
+    sudo \
+    && rm -rf /var/lib/apt/lists/*
+
+# GitHub CLI
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+    && apt-get update \
+    && apt-get install -y gh \
+    && rm -rf /var/lib/apt/lists/*
+
+# Playwright system dependencies (need root, do it once)
+# Actual browser binaries are installed below as the dev user
+RUN apt-get update \
+    && apt-get install -y \
+        libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 \
+        libcups2 libdrm2 libxkbcommon0 libxcomposite1 \
+        libxdamage1 libxrandr2 libgbm1 libpango-1.0-0 \
+        libcairo2 libasound2t64 libxshmfence1 libgtk-3-0 \
+        libx11-xcb1 libxcb-dri3-0 fonts-liberation \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create a default build user — per-project images remap UID/GID as needed
+# Ubuntu 24.04 ships with an 'ubuntu' user/group at 1000, so we evict it first
+RUN userdel -r ubuntu 2>/dev/null || true \
+    && groupdel ubuntu 2>/dev/null || true \
+    && groupadd --gid 1000 devuser \
+    && useradd --uid 1000 --gid 1000 -m devuser \
+    && echo "devuser ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/devuser \
+    && chmod 0440 /etc/sudoers.d/devuser
+
+USER devuser
+WORKDIR /home/devuser
+
+# 🐍 Python: pyenv + multiple versions
+ENV PYENV_ROOT="/home/devuser/.pyenv"
+ENV PATH="$PYENV_ROOT/bin:$PYENV_ROOT/shims:$PATH"
+
+RUN curl https://pyenv.run | bash \
+    && echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.bashrc \
+    && echo 'export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.bashrc \
+    && echo 'eval "$(pyenv init -)"' >> ~/.bashrc
+
+RUN pyenv install 3.10.13 \
+    && pyenv install 3.11.7 \
+    && pyenv install 3.12.1 \
+    && pyenv install 3.13.0 \
+    && pyenv global 3.12.1
+
+RUN pip install --upgrade pip setuptools wheel \
+    && pip install \
+        pre-commit \
+        black flake8 ruff mypy \
+        pytest pytest-cov pytest-asyncio \
+        ipython
+
+# 📦 Node.js: nvm + LTS
+ENV NVM_DIR="/home/devuser/.nvm"
+ENV NODE_VERSION=lts/*
+
+RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash \
+    && . "$NVM_DIR/nvm.sh" \
+    && nvm install $NODE_VERSION \
+    && nvm alias default $NODE_VERSION \
+    && nvm use default
+
+RUN . "$NVM_DIR/nvm.sh" && ln -sf "$(dirname $(which node))" "$NVM_DIR/default_bin"
+ENV PATH="$NVM_DIR/default_bin:$PATH"
+
+RUN . "$NVM_DIR/nvm.sh" \
+    && npm install -g \
+        typescript \
+        eslint \
+        prettier \
+        jest \
+        playwright \
+        vite
+
+# 🤖 Claude Code
+RUN . "$NVM_DIR/nvm.sh" \
+    && npm install -g @anthropic-ai/claude-code \
+    && claude --version \
+    && echo "Claude Code installed successfully"
+
+# 🎭 Playwright browsers (Chromium + Firefox)
+# System deps were installed as root above, so --with-deps is not needed here
+RUN . "$NVM_DIR/nvm.sh" \
+    && npx playwright install chromium firefox \
+    && echo "Playwright browsers installed"
+
+# Tag this layer so per-project builds can verify the base exists
+LABEL org.dockerdev.role="base-image"

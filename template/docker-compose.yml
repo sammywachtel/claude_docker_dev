@@ -29,6 +29,8 @@ services:
       - SSH_AUTH_SOCK=${SSH_AUTH_SOCK:-/ssh-agent}
       # GitHub CLI token (alternative to file-based auth)
       - GH_TOKEN=${GH_TOKEN:-}
+      # AUTO_GENERATED_BEADS_ENV_MARKER
+      # If ~/.config/beads exists, BEADS env var will be injected here
       # Google Cloud project and region (for Vertex AI, Gemini, etc.)
       # Set these in .env if your project uses GCP services
       - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-}
@@ -77,6 +79,9 @@ services:
       # Run 'gh auth login' on host first, then config is shared with containers
       - ${HOME}/.config/gh:${HOME}/.config/gh:ro
 
+      # AUTO_GENERATED_BEADS_MOUNT_MARKER
+      # If ~/.config/beads exists, BEADS credentials mount will be injected here
+
       # Google Cloud SDK config (read-only) — needed for Vertex AI / Gemini credentials
       # Run 'gcloud auth application-default login' on host first
       - ${HOME}/.config/gcloud:${HOME}/.config/gcloud:ro
@@ -114,23 +119,24 @@ services:
     # Restart policy for long-running development
     restart: unless-stopped
 
-# Persistent volumes for caches (project-specific)
+# Persistent volumes for caches (shared across all docker-dev projects)
+# No project prefix — pip, npm, etc. caches are the same regardless of project
 volumes:
   pip-cache:
     driver: local
-    name: ${PROJECT_NAME:-project}-pip-cache
+    name: docker-dev-shared-pip-cache
   npm-cache:
     driver: local
-    name: ${PROJECT_NAME:-project}-npm-cache
+    name: docker-dev-shared-npm-cache
   flutter-cache:
     driver: local
-    name: ${PROJECT_NAME:-project}-flutter-cache
+    name: docker-dev-shared-flutter-cache
   pre-commit-cache:
     driver: local
-    name: ${PROJECT_NAME:-project}-pre-commit-cache
+    name: docker-dev-shared-pre-commit-cache
   playwright-cache:
     driver: local
-    name: ${PROJECT_NAME:-project}-playwright-cache
+    name: docker-dev-shared-playwright-cache
 
 # Network for potential multi-container setups (project-specific)
 networks:
