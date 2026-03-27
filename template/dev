@@ -41,6 +41,17 @@ case "${1:-help}" in
     start)
         info "Starting Docker Dev Environment..."
 
+        # Verify the shared base image exists before trying to build
+        if ! docker image inspect docker-dev-base:latest &>/dev/null; then
+            error "Base image 'docker-dev-base:latest' not found"
+            info "Run the installer again, or build it manually:"
+            echo -e "  ${BLUE}cd $(dirname "$SCRIPT_DIR") && ./build-base.sh${NC}"
+            echo ""
+            info "Or if you have the docker_dev repo checked out:"
+            echo -e "  ${BLUE}<path-to-docker_dev>/build-base.sh${NC}"
+            exit 1
+        fi
+
         # Check SSH agent status before starting
         if [[ -z "${SSH_AUTH_SOCK:-}" ]]; then
             warning "SSH agent not detected (SSH_AUTH_SOCK not set)"
@@ -86,6 +97,15 @@ case "${1:-help}" in
         echo ""
 
         docker compose up -d --build
+
+        # Copy .claude.json into the running container (not mounted — mounting
+        # caused file corruption when host and container Claude fought over it)
+        if [[ -f "$HOME/.claude.json" ]]; then
+            info "Copying .claude.json into container..."
+            docker cp "$HOME/.claude.json" "$CONTAINER_NAME:$HOME/.claude.json"
+            success "Copied .claude.json"
+        fi
+
         success "Environment started! Container: $CONTAINER_NAME"
         echo ""
         info "Get a shell: ${BLUE}$0 shell${NC}"
@@ -113,6 +133,14 @@ case "${1:-help}" in
         # (restart keeps old SSH_AUTH_SOCK which may be stale)
         docker compose down
         docker compose up -d
+
+        # Copy .claude.json into the running container (same as start)
+        if [[ -f "$HOME/.claude.json" ]]; then
+            info "Copying .claude.json into container..."
+            docker cp "$HOME/.claude.json" "$CONTAINER_NAME:$HOME/.claude.json"
+            success "Copied .claude.json"
+        fi
+
         success "Environment restarted"
         echo ""
         info "Get a shell: ${BLUE}$0 shell${NC}"
@@ -172,11 +200,47 @@ case "${1:-help}" in
         ;;
 
     rebuild)
-        info "Rebuilding container..."
+        info "Rebuilding project container (using existing base image)..."
         docker compose down
         docker compose build --no-cache
         docker compose up -d
         success "Container rebuilt"
+        ;;
+
+    rebuild-base)
+        info "Rebuilding shared base image..."
+        info "This will affect ALL docker-dev projects on next rebuild/start"
+        echo ""
+        # Find build-base.sh — check common locations
+        BUILD_SCRIPT=""
+        for candidate in \
+            "$PROJECT_ROOT/build-base.sh" \
+            "$(dirname "$PROJECT_ROOT")/docker_dev/build-base.sh" \
+            "$(dirname "$PROJECT_ROOT")/docker-dev/build-base.sh"; do
+            if [[ -x "$candidate" ]]; then
+                BUILD_SCRIPT="$candidate"
+                break
+            fi
+        done
+
+        if [[ -n "$BUILD_SCRIPT" ]]; then
+            "$BUILD_SCRIPT" --force
+        else
+            warning "build-base.sh not found — building directly"
+            # Fallback: if we can find the Dockerfile.base
+            for candidate in \
+                "$PROJECT_ROOT/Dockerfile.base" \
+                "$(dirname "$PROJECT_ROOT")/docker_dev/Dockerfile.base" \
+                "$(dirname "$PROJECT_ROOT")/docker-dev/Dockerfile.base"; do
+                if [[ -f "$candidate" ]]; then
+                    docker build -t docker-dev-base:latest -f "$candidate" "$(dirname "$candidate")"
+                    success "Base image rebuilt"
+                    break
+                fi
+            done
+        fi
+        echo ""
+        info "Now rebuild your project container: ${BLUE}$0 rebuild${NC}"
         ;;
 
     help|--help|-h)
@@ -188,7 +252,8 @@ case "${1:-help}" in
         echo -e "  ${GREEN}start${NC}       Start the development environment"
         echo -e "  ${GREEN}stop${NC}        Stop the development environment"
         echo -e "  ${GREEN}restart${NC}     Restart the development environment"
-        echo -e "  ${GREEN}rebuild${NC}     Rebuild the container from scratch"
+        echo -e "  ${GREEN}rebuild${NC}     Rebuild the project container (keeps base image)"
+        echo -e "  ${GREEN}rebuild-base${NC}  Rebuild the shared base image (all tools)"
         echo -e "  ${GREEN}clean${NC}       Remove container and cached volumes"
         echo -e "  ${GREEN}status${NC}      Show container status"
         echo ""
