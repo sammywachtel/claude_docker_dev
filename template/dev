@@ -113,6 +113,27 @@ case "${1:-help}" in
             success "Copied .claude.json"
         fi
 
+        # Copy gcloud config into the container (writable copy, not the ro mount)
+        # gcloud CLI needs to write logs, token refreshes, and credential DBs
+        # even for read operations, so the read-only mount doesn't cut it.
+        # Each container gets its own copy so auth changes stay isolated.
+        if [[ -d "$HOME/.config/gcloud" ]]; then
+            info "Copying gcloud config into container..."
+            # Copy credentials and config but skip virtenv (macOS Python
+            # binaries that won't run on Linux) and logs (just noise).
+            # Use tar to filter instead of docker cp which copies everything.
+            # .config is owned by root (Docker creates it for the gh/beads
+            # read-only submounts), so we need sudo to mkdir and extract there.
+            docker exec "$CONTAINER_NAME" sudo mkdir -p "$HOME/.config/gcloud"
+            docker exec "$CONTAINER_NAME" sudo chown "$(id -u):$(id -g)" "$HOME/.config/gcloud"
+            tar -C "$HOME/.config" --no-xattrs -cf - \
+                --exclude='gcloud/virtenv' \
+                --exclude='gcloud/logs' \
+                gcloud \
+              | docker exec -i "$CONTAINER_NAME" tar -C "$HOME/.config" -xf - 2>/dev/null
+            success "Copied gcloud config"
+        fi
+
         success "Environment started! Container: $CONTAINER_NAME"
         echo ""
         info "Get a shell: ${BLUE}$0 shell${NC}"
@@ -146,6 +167,21 @@ case "${1:-help}" in
             info "Copying .claude.json into container..."
             docker cp "$HOME/.claude.json" "$CONTAINER_NAME:$HOME/.claude.json"
             success "Copied .claude.json"
+        fi
+
+        # Copy gcloud config (same as start)
+        if [[ -d "$HOME/.config/gcloud" ]]; then
+            info "Copying gcloud config into container..."
+            # .config is owned by root (Docker creates it for the gh/beads
+            # read-only submounts), so we need sudo to mkdir and extract there.
+            docker exec "$CONTAINER_NAME" sudo mkdir -p "$HOME/.config/gcloud"
+            docker exec "$CONTAINER_NAME" sudo chown "$(id -u):$(id -g)" "$HOME/.config/gcloud"
+            tar -C "$HOME/.config" --no-xattrs -cf - \
+                --exclude='gcloud/virtenv' \
+                --exclude='gcloud/logs' \
+                gcloud \
+              | docker exec -i "$CONTAINER_NAME" tar -C "$HOME/.config" -xf - 2>/dev/null
+            success "Copied gcloud config"
         fi
 
         success "Environment restarted"

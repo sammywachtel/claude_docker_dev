@@ -82,9 +82,11 @@ services:
       # AUTO_GENERATED_BEADS_MOUNT_MARKER
       # If ~/.config/beads exists, BEADS credentials mount will be injected here
 
-      # Google Cloud SDK config (read-only) — needed for Vertex AI / Gemini credentials
-      # Run 'gcloud auth application-default login' on host first
-      - ${HOME}/.config/gcloud:${HOME}/.config/gcloud:ro
+      # Google Cloud SDK config — copied (not mounted) into the container at
+      # start time by `dev start`. gcloud CLI needs write access for logs,
+      # token refreshes, and credential DBs, so a read-only mount won't work.
+      # Each container gets its own writable copy, keeping auth changes isolated.
+      # Run 'gcloud auth application-default login' on host to set up credentials.
 
       # SSH agent forwarding (enables password-protected keys via macOS keychain)
       # If SSH_AUTH_SOCK is not set, this creates an empty mount (SSH will still work without agent)
