@@ -59,6 +59,11 @@ ENV PATH="$PYENV_ROOT/bin:$PYENV_ROOT/shims:$PATH"
 ENV NVM_DIR="/home/$USERNAME/.nvm"
 ENV PATH="$NVM_DIR/default_bin:$PATH"
 
+# Regenerate pyenv shims — the base image created them with hardcoded paths
+# pointing at /home/devuser/.pyenv, but usermod -m moved everything.
+# Without this, every python/pip/pyenv shim dies with "No such file or directory".
+RUN pyenv rehash
+
 # Claude Code bypass permissions config
 RUN mkdir -p /home/$USERNAME/.claude \
     && echo '{"bypass_permissions": true}' > /home/$USERNAME/.claude/settings.json
