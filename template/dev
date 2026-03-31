@@ -218,33 +218,48 @@ case "${1:-help}" in
         info "Rebuilding shared base image..."
         info "This will affect ALL docker-dev projects on next rebuild/start"
         echo ""
-        # Find build-base.sh — check common locations
+        # Find build-base.sh — walk up from PROJECT_ROOT looking for the docker_dev
+        # repo as a sibling at any ancestor level. Handles projects nested several
+        # directories deep (e.g. ~/Projects/org/app/.docker-dev).
         BUILD_SCRIPT=""
-        for candidate in \
-            "$PROJECT_ROOT/build-base.sh" \
-            "$(dirname "$PROJECT_ROOT")/docker_dev/build-base.sh" \
-            "$(dirname "$PROJECT_ROOT")/docker-dev/build-base.sh"; do
-            if [[ -x "$candidate" ]]; then
-                BUILD_SCRIPT="$candidate"
-                break
-            fi
+        SEARCH_DIR="$PROJECT_ROOT"
+        while [[ "$SEARCH_DIR" != "/" ]]; do
+            for name in docker_dev docker-dev; do
+                candidate="$(dirname "$SEARCH_DIR")/$name/build-base.sh"
+                if [[ -x "$candidate" ]]; then
+                    BUILD_SCRIPT="$candidate"
+                    break 2
+                fi
+            done
+            SEARCH_DIR="$(dirname "$SEARCH_DIR")"
         done
 
         if [[ -n "$BUILD_SCRIPT" ]]; then
             "$BUILD_SCRIPT" --force
         else
-            warning "build-base.sh not found — building directly"
-            # Fallback: if we can find the Dockerfile.base
-            for candidate in \
-                "$PROJECT_ROOT/Dockerfile.base" \
-                "$(dirname "$PROJECT_ROOT")/docker_dev/Dockerfile.base" \
-                "$(dirname "$PROJECT_ROOT")/docker-dev/Dockerfile.base"; do
-                if [[ -f "$candidate" ]]; then
-                    docker build -t docker-dev-base:latest -f "$candidate" "$(dirname "$candidate")"
-                    success "Base image rebuilt"
-                    break
-                fi
+            # Last resort: search the same way for Dockerfile.base and build directly
+            warning "build-base.sh not found — looking for Dockerfile.base..."
+            DOCKERFILE=""
+            SEARCH_DIR="$PROJECT_ROOT"
+            while [[ "$SEARCH_DIR" != "/" ]]; do
+                for name in docker_dev docker-dev; do
+                    candidate="$(dirname "$SEARCH_DIR")/$name/Dockerfile.base"
+                    if [[ -f "$candidate" ]]; then
+                        DOCKERFILE="$candidate"
+                        break 2
+                    fi
+                done
+                SEARCH_DIR="$(dirname "$SEARCH_DIR")"
             done
+
+            if [[ -n "$DOCKERFILE" ]]; then
+                docker build -t docker-dev-base:latest -f "$DOCKERFILE" "$(dirname "$DOCKERFILE")"
+                success "Base image rebuilt"
+            else
+                error "Could not find docker_dev repo (build-base.sh or Dockerfile.base)"
+                info "Build it manually: ${BLUE}<path-to-docker_dev>/build-base.sh --force${NC}"
+                exit 1
+            fi
         fi
         echo ""
         info "Now rebuild your project container: ${BLUE}$0 rebuild${NC}"

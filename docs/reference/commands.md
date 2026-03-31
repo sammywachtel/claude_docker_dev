@@ -153,6 +153,28 @@ Rebuild the Docker image from scratch. Stops the container, removes the image, a
 
 ---
 
+### rebuild-base
+
+```bash
+./.docker-dev/dev rebuild-base
+```
+
+Rebuild the shared base image (`docker-dev-base:latest`) with `--force`. This is needed when `Dockerfile.base` changes (e.g., new system tools added).
+
+**Use cases**:
+- New tools added to the base image (Python versions, CLIs, etc.)
+- Base image is corrupted or outdated
+- Updating system packages
+
+**What happens**:
+- Searches up the directory tree for the `docker_dev` repo
+- Runs `build-base.sh --force` to rebuild the shared base image
+- Does **not** rebuild your project container — run `rebuild` after
+
+**Important**: After `rebuild-base`, you must also run `rebuild` so your project image picks up the new base layer.
+
+---
+
 ### clean
 
 ```bash
@@ -325,7 +347,8 @@ docker compose -f .docker-dev/docker-compose.yml exec --user root devenv bash
 | `restart` | Restart container | No | < 5 sec |
 | `status` | Check container status | No | Instant |
 | `logs` | View logs | No | Instant |
-| `rebuild` | Rebuild image | No | 5-10 min |
+| `rebuild` | Rebuild project image | No | 5-10 min |
+| `rebuild-base` | Rebuild shared base image | No | 15-20 min |
 | `clean` | Delete container & volumes | ⚠️ **Yes** | < 10 sec |
 | `shell` | Interactive shell | No | Instant |
 | `claude` | Run Claude Code | No | Instant |

@@ -46,6 +46,7 @@ Claude can read, write, and delete any file in your project directory without as
 - **Special Package Handling**: Playwright and Puppeteer browsers installed automatically
 - **Claude Code Ready**: CLI installed with bypass permissions enabled
 - **GitHub CLI**: `gh` command pre-installed for GitHub operations
+- **Cloud CLIs**: Azure CLI (`az`) and Google Cloud CLI (`gcloud`) pre-installed
 - **Git & SSH Access**: Your `.gitconfig` and `.ssh` keys mounted (read-only)
 - **Volume-Mounted**: Your project files stay on host - no copying, no sync issues
 - **PyCharm Friendly**: Edit files normally, run Claude Code in container
@@ -160,6 +161,9 @@ pytest, jest, black, eslint, mypy, prettier
 
 # Git & GitHub tools
 git, gh (GitHub CLI)
+
+# Cloud CLIs
+az (Azure CLI), gcloud (Google Cloud CLI)
 
 # Utilities
 curl, wget, jq, ripgrep, fd-find, bat
@@ -615,7 +619,7 @@ This is a template/installer for local use. Possible future additions:
 - **IDE Integration Guides**: Detailed PyCharm, VSCode setup
 - **Project Templates**: Pre-configured setups for common stacks
 - **Performance Tuning**: Mount options, cache optimization
-- **Additional Tools**: Add database clients, cloud CLIs, etc.
+- **Additional Tools**: Add database clients, etc.
 
 ## 📝 License
 

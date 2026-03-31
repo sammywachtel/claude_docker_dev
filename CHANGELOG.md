@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- **Azure CLI (`az`)** - Pre-installed in base image for Azure resource management
+- **Google Cloud CLI (`gcloud`)** - Pre-installed in base image for GCP operations
+
+### Fixed
+- **pyenv shims broken after user rename** — Base image shims hardcode `/home/devuser/.pyenv` paths, which break when the facade layer renames the user. Added `pyenv rehash` after ENV update to regenerate shims with correct paths.
+- **`rebuild-base` can't find docker_dev repo** — The search only checked one directory level up, failing for projects nested deeper (e.g., `~/Projects/org/app/`). Now walks up the directory tree to find the repo at any ancestor level.
+
 - **Diátaxis Documentation Framework** - Reorganized documentation into tutorials, how-to guides, reference, and explanation sections
   - Created `/docs/` directory with Diátaxis structure
   - Added [Getting Started Tutorial](docs/tutorials/getting-started.md) - Complete walkthrough for first-time users

@@ -36,7 +36,7 @@ A Docker-based isolated development environment for safe Claude Code experimenta
 Installs a `.docker-dev/` folder into your projects that provides:
 
 - **Isolated Sandbox**: Claude Code with bypass permissions runs safely in a container
-- **All Tools Ready**: Python (3.10-3.13), Node.js, Flutter, GitHub CLI pre-installed
+- **All Tools Ready**: Python (3.10-3.13), Node.js, Flutter, GitHub CLI, Azure CLI, Google Cloud CLI pre-installed
 - **Volume-Mounted**: Edit files in PyCharm on host, run Claude in container
 - **Git & SSH Access**: Your credentials mounted read-only for seamless operations
 - **Multi-Project Support**: Run multiple containers simultaneously with unique ports

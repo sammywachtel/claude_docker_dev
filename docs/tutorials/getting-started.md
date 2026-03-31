@@ -52,7 +52,7 @@ Start the container (first run takes 5-10 minutes to build):
 ```
 
 **What's happening?**
-- Docker builds an Ubuntu 22.04 image with Python, Node.js, and dev tools
+- Docker builds an Ubuntu 24.04 image with Python, Node.js, cloud CLIs, and dev tools
 - Sets up volume mounts for your project
 - Configures SSH agent forwarding
 - Starts the container in the background
