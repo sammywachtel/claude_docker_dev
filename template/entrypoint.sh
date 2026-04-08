@@ -131,16 +131,6 @@ if [ -f "$PROJECT_DIR/.docker-dev/scripts/check-ssh-config.sh" ]; then
     fi
 fi
 
-# Custom beads/bd binary — our fork with config-file credential support
-# Statically linked, no runtime deps. Remove this once upstream PR merges.
-BD_BIN="$PROJECT_DIR/.docker-dev/bin/bd"
-if [ -f "$BD_BIN" ]; then
-    echo "🔧 Installing bd (beads) binary..."
-    sudo cp "$BD_BIN" /usr/local/bin/bd
-    sudo chmod +x /usr/local/bin/bd
-    echo "✅ bd installed to /usr/local/bin/bd"
-fi
-
 # Victory lap: Ready to code!
 echo "🎉 Development environment ready!"
 echo ""

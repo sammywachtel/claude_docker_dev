@@ -10,6 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Azure CLI (`az`)** - Pre-installed in base image for Azure resource management
 - **Google Cloud CLI (`gcloud`)** - Pre-installed in base image for GCP operations
 
+### Changed
+- **Base image UID/GID baking** — The base image now bakes the host user's UID/GID at build time (`build-base.sh` passes them as build args). Per-project images only run `chown` when UID/GID differs from the base, eliminating ~4.5GB of duplicated layer data per project. When building on the same machine, the facade layer is now zero-cost.
+- **build-base.sh UID/GID detection** — Script checks if existing base image was built with matching UID/GID before skipping rebuild. Automatically rebuilds if UID/GID changed (e.g., after user migration).
+- **Code comment cleanup** — Removed emojis from Dockerfile and shell script comments for cleaner `git diff` output.
+
+### Removed
+- **bd binary auto-install** — Removed custom beads/bd binary and auto-install code from entrypoint.sh. The 51MB binary was project-specific and shouldn't live in the template.
+
 ### Fixed
 - **pyenv shims broken after user rename** — Base image shims hardcode `/home/devuser/.pyenv` paths, which break when the facade layer renames the user. Added `pyenv rehash` after ENV update to regenerate shims with correct paths.
 - **`rebuild-base` can't find docker_dev repo** — The search only checked one directory level up, failing for projects nested deeper (e.g., `~/Projects/org/app/`). Now walks up the directory tree to find the repo at any ancestor level.

@@ -1,4 +1,4 @@
-# 🏗️ Docker Dev Base Image - The Heavy Lifting, Done Once
+# Docker Dev Base Image - The Heavy Lifting, Done Once
 # All the expensive installs (Python versions, Node, Playwright browsers, Claude Code)
 # live here so they're shared across every project container.
 # Build with: ./build-base.sh
@@ -10,6 +10,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     TERM=xterm-256color
+
+# Host user identity — baked into the base so every layer is already
+# owned by the correct UID/GID.  No per-project chown needed.
+ARG USERNAME=devuser
+ARG USER_UID=1000
+ARG USER_GID=1000
 
 # System essentials and build tools
 RUN apt-get update && apt-get install -y \
@@ -54,20 +60,23 @@ RUN apt-get update \
         libx11-xcb1 libxcb-dri3-0 fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
-# Create a default build user — per-project images remap UID/GID as needed
-# Ubuntu 24.04 ships with an 'ubuntu' user/group at 1000, so we evict it first
+# Create the dev user with the HOST UID/GID from the start.
+# This means every file installed below (pyenv, nvm, Playwright, etc.)
+# is already owned by the correct user — no chown -R needed downstream.
 RUN userdel -r ubuntu 2>/dev/null || true \
     && groupdel ubuntu 2>/dev/null || true \
-    && groupadd --gid 1000 devuser \
-    && useradd --uid 1000 --gid 1000 -m devuser \
-    && echo "devuser ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/devuser \
-    && chmod 0440 /etc/sudoers.d/devuser
+    && (groupadd --gid ${USER_GID} ${USERNAME} 2>/dev/null \
+        || groupmod -n ${USERNAME} $(getent group ${USER_GID} | cut -d: -f1) 2>/dev/null \
+        || true) \
+    && useradd --uid ${USER_UID} --gid ${USER_GID} -m ${USERNAME} \
+    && echo "${USERNAME} ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} \
+    && chmod 0440 /etc/sudoers.d/${USERNAME}
 
-USER devuser
-WORKDIR /home/devuser
+USER ${USERNAME}
+WORKDIR /home/${USERNAME}
 
-# 🐍 Python: pyenv + multiple versions
-ENV PYENV_ROOT="/home/devuser/.pyenv"
+# Python: pyenv + multiple versions
+ENV PYENV_ROOT="/home/${USERNAME}/.pyenv"
 ENV PATH="$PYENV_ROOT/bin:$PYENV_ROOT/shims:$PATH"
 
 RUN curl https://pyenv.run | bash \
@@ -88,8 +97,8 @@ RUN pip install --upgrade pip setuptools wheel \
         pytest pytest-cov pytest-asyncio \
         ipython
 
-# 📦 Node.js: nvm + LTS
-ENV NVM_DIR="/home/devuser/.nvm"
+# Node.js: nvm + LTS
+ENV NVM_DIR="/home/${USERNAME}/.nvm"
 ENV NODE_VERSION=lts/*
 
 RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash \
@@ -110,17 +119,20 @@ RUN . "$NVM_DIR/nvm.sh" \
         playwright \
         vite
 
-# 🤖 Claude Code
+# Claude Code
 RUN . "$NVM_DIR/nvm.sh" \
     && npm install -g @anthropic-ai/claude-code \
     && claude --version \
     && echo "Claude Code installed successfully"
 
-# 🎭 Playwright browsers (Chromium + Firefox)
+# Playwright browsers (Chromium + Firefox)
 # System deps were installed as root above, so --with-deps is not needed here
 RUN . "$NVM_DIR/nvm.sh" \
     && npx playwright install chromium firefox \
     && echo "Playwright browsers installed"
 
-# Tag this layer so per-project builds can verify the base exists
-LABEL org.dockerdev.role="base-image"
+# Store the UID/GID/USERNAME so downstream images can detect matches
+LABEL org.dockerdev.role="base-image" \
+      org.dockerdev.uid="${USER_UID}" \
+      org.dockerdev.gid="${USER_GID}" \
+      org.dockerdev.username="${USERNAME}"

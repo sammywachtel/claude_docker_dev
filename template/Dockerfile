@@ -1,7 +1,9 @@
-# 🎯 Docker Dev Environment - Per-Project Layer
-# The base image (docker-dev-base:latest) has all the heavy tools pre-installed.
-# This thin layer just maps the host user's UID/GID so file permissions work.
-# Builds in seconds instead of 15+ minutes.
+# Docker Dev Environment - Per-Project Layer
+# The base image (docker-dev-base:latest) has all the heavy tools pre-installed
+# WITH the host user's UID/GID already baked in.
+# This thin layer just handles the rare case where UID/GID don't match
+# (e.g., building on a different machine) and sets up shell niceties.
+# Builds in seconds, adds near-zero disk overhead.
 
 FROM docker-dev-base:latest
 
@@ -12,35 +14,42 @@ ARG USER_GID=1000
 
 USER root
 
-# Remap the base image's default user (devuser:1000:1000) to match the host.
-# If UID/GID already match, these are harmless no-ops.
-# The groupmod/usermod dance handles the case where the target GID/UID
-# is already taken by a system group/user.
-RUN if [ "$USER_GID" != "1000" ]; then \
-        # Check if target GID is already taken by another group
+# Only remap if the base image was built with different UID/GID.
+# If they match (the normal case when build-base.sh was run on the same machine),
+# this entire block is a no-op and creates NO new layer data.
+RUN BASE_UID=$(id -u devuser 2>/dev/null || id -u $USERNAME 2>/dev/null || echo "1000") && \
+    BASE_GID=$(id -g devuser 2>/dev/null || id -g $USERNAME 2>/dev/null || echo "1000") && \
+    NEEDS_REMAP="false" && \
+    if [ "$USER_GID" != "$BASE_GID" ]; then \
+        NEEDS_REMAP="true"; \
         EXISTING_GROUP=$(getent group "$USER_GID" | cut -d: -f1 2>/dev/null || true); \
         if [ -n "$EXISTING_GROUP" ] && [ "$EXISTING_GROUP" != "devuser" ]; then \
             groupmod -g 9999 "$EXISTING_GROUP"; \
         fi; \
         groupmod -g "$USER_GID" devuser; \
-    fi \
-    && if [ "$USER_UID" != "1000" ]; then \
+    fi && \
+    if [ "$USER_UID" != "$BASE_UID" ]; then \
+        NEEDS_REMAP="true"; \
         EXISTING_USER=$(getent passwd "$USER_UID" | cut -d: -f1 2>/dev/null || true); \
         if [ -n "$EXISTING_USER" ] && [ "$EXISTING_USER" != "devuser" ]; then \
             usermod -u 9999 "$EXISTING_USER"; \
         fi; \
         usermod -u "$USER_UID" devuser; \
-    fi \
-    && if [ "$USERNAME" != "devuser" ]; then \
+    fi && \
+    if [ "$USERNAME" != "devuser" ]; then \
         usermod -l "$USERNAME" -d "/home/$USERNAME" -m devuser 2>/dev/null || true; \
         groupmod -n "$USERNAME" devuser 2>/dev/null || true; \
-        # Update sudoers
         echo "$USERNAME ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/"$USERNAME"; \
         chmod 0440 /etc/sudoers.d/"$USERNAME"; \
         rm -f /etc/sudoers.d/devuser; \
-    fi \
-    # Fix ownership of the home directory after UID/GID change
-    && chown -R "$USER_UID:$USER_GID" "/home/$USERNAME" 2>/dev/null || true
+        ln -s "/home/$USERNAME" /home/devuser; \
+    fi && \
+    if [ "$NEEDS_REMAP" = "true" ]; then \
+        echo "UID/GID mismatch detected — running chown (this adds a large layer)"; \
+        chown -R "$USER_UID:$USER_GID" "/home/$USERNAME" 2>/dev/null || true; \
+    else \
+        echo "UID/GID match base image — no chown needed (zero-cost layer)"; \
+    fi
 
 USER $USERNAME
 WORKDIR /home/$USERNAME
@@ -59,9 +68,7 @@ ENV PATH="$PYENV_ROOT/bin:$PYENV_ROOT/shims:$PATH"
 ENV NVM_DIR="/home/$USERNAME/.nvm"
 ENV PATH="$NVM_DIR/default_bin:$PATH"
 
-# Regenerate pyenv shims — the base image created them with hardcoded paths
-# pointing at /home/devuser/.pyenv, but usermod -m moved everything.
-# Without this, every python/pip/pyenv shim dies with "No such file or directory".
+# Regenerate pyenv shims (lightweight, just symlinks)
 RUN pyenv rehash
 
 # Claude Code bypass permissions config
